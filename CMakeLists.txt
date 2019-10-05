@@ -77,17 +77,17 @@ else()
 endif()
 
 #
-# Define the location of the dice libraries, DICE_LIB_DIR_1:
+# Define the location of the dice libraries, DICE_LIB_DIR:
 #
 
-# NOTE: If this example is used as a template, the DICE_LIB_DIR_1 variable should be defined
-# in your do-cmake script with -D DICE_LIB_DIR_1:STRING="<location>"
-IF (NOT DEFINED DICE_LIB_DIR_1)
-  MESSAGE(FATAL_ERROR "\nError: cmake must define DICE_LIB_DIR_1:
-  (-D DICE_LIB_DIR_1:FILEPATH=<DICe_lib_prefix>)!")
+# NOTE: If this example is used as a template, the DICE_LIB_DIR variable should be defined
+# in your do-cmake script with -D DICE_LIB_DIR:STRING="<location>"
+IF (NOT DEFINED DICE_LIB_DIR)
+  MESSAGE(FATAL_ERROR "\nError: cmake must define DICE_LIB_DIR:
+  (-D DICE_LIB_DIR:FILEPATH=<DICe_lib_prefix>)!")
 ENDIF()
 MESSAGE(STATUS "Using DICe libraries from: ${DICE_LIB_DIR}")
-link_directories(${DICE_LIB_DIR_1} ${DICE_LIB_DIR_2})
+link_directories(${DICE_LIB_DIR})
 
 #
 # Define the location of the dice libraries, DICE_HEADER_DIR:
@@ -100,11 +100,11 @@ IF (NOT DEFINED DICE_HEADER_DIR)
   (-D DICE_HEADER_DIR:FILEPATH=<DICe_include_prefix>)!")
 ENDIF()
 MESSAGE(STATUS "Using DICe headers from: ${DICE_HEADER_DIR}")
-include_directories(${DICE_HEADER_DIR} ${DICE_HEADER_DIR_2} ${DICE_HEADER_DIR_3} ${DICE_HEADER_DIR_4} ${DICE_HEADER_DIR_5} ${DICE_HEADER_DIR_6})
+include_directories(${DICE_HEADER_DIR})
 
-add_executable(main main.cpp)
+add_executable(masters_v1 main.cpp)
 # add the dice libraries
-target_link_libraries(main
+target_link_libraries(masters_v1
   dicecore
 )
 #
@@ -121,7 +121,7 @@ target_link_libraries(main
 #  MESSAGE(STATUS "Using tiff library from: ${tiff_lib}")
 #  target_link_libraries(main diceutils ${tiff_lib})
 #endif()
-target_link_libraries(main diceutils)
+target_link_libraries(masters_v1 diceutils)
 
 # NOTE: If this example is used as a template, the optional JPEG_DIR variable can be defined
 # in your do-cmake script with -D JPEG_DIR:STRING="<location>" only if libjpeg is not
@@ -131,6 +131,7 @@ target_link_libraries(main diceutils)
 #  MESSAGE(STATUS "Using jpeg library from: ${jpeg_lib}")
 #  target_link_libraries(main ${jpeg_lib})
 #endif()
+
 
 # NOTE: If this example is used as a template, the optional PNG_DIR variable can be defined
 # in your do-cmake script with -D PNG_DIR:STRING="<location>" only if libjpeg is not
@@ -170,19 +171,19 @@ ENDIF()
 
 IF(DICE_ENABLE_GLOBAL)
   add_definitions(-DDICE_ENABLE_GLOBAL=1)
-  target_link_libraries(main
+  target_link_libraries(masters_v1
   exodus
   ifpack
   belos)
 ENDIF()
 
 IF(DICE_ENABLE_OPENCV)
-  target_link_libraries(main
+  target_link_libraries(masters_v1
     ${OpenCV_LIBRARIES})
 ENDIF()
   
 # add the other libraries needed
-target_link_libraries(main
+target_link_libraries(masters_v1
   teuchoscore
   teuchosnumerics
   teuchoscomm
@@ -191,7 +192,7 @@ target_link_libraries(main
 )
 
 IF(DICE_ENABLE_MANYCORE)
-  target_link_libraries(main
+  target_link_libraries(masters_v1
     tpetra
     kokkoscore
     ifpack
@@ -199,10 +200,10 @@ IF(DICE_ENABLE_MANYCORE)
   )
   ADD_DEFINITIONS(-DDICE_KOKKOS=1 -DDICE_TPETRA=1)
 ELSE()
-  target_link_libraries(main
+  target_link_libraries(masters_v1
   epetra)
   IF(DICE_ENABLE_GLOBAL)
-    target_link_libraries(main
+    target_link_libraries(masters_v1
       belosepetra)
   ENDIF()
 ENDIF()

@@ -8,13 +8,59 @@
 #include <DICe.h>
 #include <DICe_Schema.h>
 
+#include "opencv2/opencv.hpp"
+
 // See the custom_app example in the tutorial for more information about the code below
 
 using namespace DICe::field_enums;
+using namespace std;
+using namespace cv;
+
+float Brightness;
+float FrameWidth ;
+float FrameHeight;
 
 int main(int argc, char *argv[]) {
 
   std::cout << "Begin masters DICe program\n";
+
+    VideoCapture cap(0); // open the default camera
+
+    Brightness = cap.get(CV_CAP_PROP_BRIGHTNESS);
+    FrameWidth = cap.get(CV_CAP_PROP_FRAME_WIDTH);
+    FrameHeight = cap.get(CV_CAP_PROP_FRAME_HEIGHT);
+
+    cout<<"===================================="<<endl<<endl;
+    cout<<"Default Brightness -------> "<<Brightness<<endl;
+    cout<<"Default Width      -------> "<<FrameWidth<<endl;
+    cout<<"Default Height     -------> "<<FrameHeight<<endl;
+    cout<<"===================================="<<endl;
+
+
+    if(!cap.isOpened())  // check if we succeeded
+    {
+        std::cout << "No camera can be found\n";
+        return -1;
+    }
+    else {
+        cout << "Camera is open\n";
+    }
+
+    Mat edges;
+    namedWindow("edges",1);
+    for(;;)
+    {
+        Mat frame;
+        cap >> frame; // get a new frame from camera
+        imshow("edges", frame);
+        char c = waitKey(5);
+        if(c == 'q') {
+            break;
+        }
+    }
+    // the camera will be deinitialized automatically in VideoCapture destructor
+    cout << "Program End\n";
+    return 0;
   //
   // STEP 0: initialize threading, etc if it is enabled
   //
