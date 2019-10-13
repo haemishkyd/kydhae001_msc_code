@@ -3,6 +3,7 @@
 //
 
 #include <iostream>
+#include <string>
 
 // DICe includes for classes used below:
 #include <DICe.h>
@@ -16,68 +17,26 @@ using namespace DICe::field_enums;
 using namespace std;
 using namespace cv;
 
+static DICe::Schema dic_init(int argc, char *argv[]);
+static void run_2D_dic(DICe::Schema schema);
+
 float Brightness;
 float FrameWidth;
 float FrameHeight;
-
-int main(int argc, char *argv[]) {
-
-    std::cout << "Begin masters DICe program\n";
-
-    bool first_pic = false;
-    int image_cap_sm = 0;
-    VideoCapture cap(0); // open the default camera
-
-    Brightness = cap.get(CV_CAP_PROP_BRIGHTNESS);
-    FrameWidth = cap.get(CV_CAP_PROP_FRAME_WIDTH);
-    FrameHeight = cap.get(CV_CAP_PROP_FRAME_HEIGHT);
-
-    cout << "====================================" << endl << endl;
-    cout << "Default Brightness -------> " << Brightness << endl;
-    cout << "Default Width      -------> " << FrameWidth << endl;
-    cout << "Default Height     -------> " << FrameHeight << endl;
-    cout << "====================================" << endl;
-
-
-    if (!cap.isOpened()) {  // check if we succeeded
-        std::cout << "No camera can be found\n";
-        return -1;
-    } else {
-        cout << "Camera is open\n";
+class SubsetData{
+public:
+    int X_Coord;
+    int Y_Coord;
+    SubsetData(int x,int y) {     // Constructor
+        X_Coord = x;
+        Y_Coord = y;
     }
+};
 
-    Mat edges;
-    namedWindow("edges", 1);
-    for (;;) {
-        Mat frame;
-        cap >> frame; // get a new frame from camera
-        imshow("edges", frame);
-        char c = waitKey(5);
+list <SubsetData> subSets;
 
-        if (c == 'c') {
-            switch (image_cap_sm) {
-                case 0:
-                    image_cap_sm++;
-                    imwrite("img_1.tiff",frame);
-                    break;
-                case 1:
-                    image_cap_sm = 0;
-                    imwrite("img_2.tiff",frame);
-                    break;
-                default:
-                    image_cap_sm = 0;
-                    break;
-            }
-        }
-
-        if (c == 'q') {
-            break;
-        }
-    }
-    // the camera will be deinitialized automatically in VideoCapture destructor
-    cout << "Program End\n";
-    return 0;
-
+static DICe::Schema dic_init(int argc, char *argv[])
+{
     //
     // STEP 0: initialize threading, etc if it is enabled
     //
@@ -120,6 +79,24 @@ int main(int argc, char *argv[]) {
     // There are also set methods that take DICe::Images as input arguments or pointers to arrays of intensity values.
     // See DICe::Schema.h for these methods
     schema.print_fields();
+    std::cout << "HK:" << schema.local_num_subsets() << std::endl;
+    for(int subset_idx = 0;subset_idx<schema.local_num_subsets();subset_idx++){
+        stringstream sx;
+        stringstream sy;
+        sx << schema.mesh()->get_field(schema.mesh()->get_field_spec("COORDINATE_X"))->local_value(subset_idx);
+        sy << schema.mesh()->get_field(schema.mesh()->get_field_spec("COORDINATE_Y"))->local_value(subset_idx);
+        SubsetData newOne(stoi(sx.str()),
+                          stoi(sy.str()));
+        subSets.push_front(newOne);
+        std::cout << "HK: X:" << newOne.X_Coord << std::endl;
+        std::cout << "HK: Y:" << newOne.Y_Coord << std::endl;
+    }
+
+    return schema;
+}
+
+static void run_2D_dic(DICe::Schema schema)
+{
     //
     // STEP 3:
     //
@@ -156,31 +133,75 @@ int main(int argc, char *argv[]) {
     // for example if you wanted to move subset 0 to a new x-location, the syntax would be
     schema.local_field_value(0, SUBSET_COORDINATES_X_FS) = 150;
 
-    //
-    // Test the computed values to make sure this example is working properly
-    //
-    int errorFlag = 0;
-    double errorTol = 0.1;
-    // check that 4 subsets were created
-    if (schema.local_num_subsets() != 4) {
-        std::cout << "Error, the number of points is not correct" << std::endl;
-        errorFlag++;
+    DICe::finalize();
+}
+
+int main(int argc, char *argv[]) {
+
+    std::cout << "Begin masters DICe program\n";
+
+   int image_cap_sm = 0;
+
+    DICe::Schema schema = dic_init(argc, argv);
+
+    VideoCapture cap(0); // open the default camera
+
+    Brightness = cap.get(CV_CAP_PROP_BRIGHTNESS);
+    FrameWidth = cap.get(CV_CAP_PROP_FRAME_WIDTH);
+    FrameHeight = cap.get(CV_CAP_PROP_FRAME_HEIGHT);
+
+    cout << "====================================" << endl << endl;
+    cout << "Default Brightness -------> " << Brightness << endl;
+    cout << "Default Width      -------> " << FrameWidth << endl;
+    cout << "Default Height     -------> " << FrameHeight << endl;
+    cout << "====================================" << endl;
+
+
+    if (!cap.isOpened()) {  // check if we succeeded
+        std::cout << "No camera can be found\n";
+        return -1;
+    } else {
+        cout << "Camera is open\n";
     }
-    // check that the solution displacements in x are in the vicinity of 0.4 pixels
-    for (int i = 0; i < schema.local_num_subsets(); ++i) {
-        if (std::abs(schema.local_field_value(i, SUBSET_DISPLACEMENT_X_FS) - 0.4) > errorTol) {
-            std::cout << "Error, the displacement solution is not correct" << std::endl;
-            errorFlag++;
+
+    Mat edges;
+    namedWindow("edges", 1);
+    for (;;) {
+        Mat frame;
+        cap >> frame; // get a new frame from camera
+        for (const SubsetData & theSet : subSets)
+        {
+            //FIXME: We need to get the size from the file
+            Rect r=Rect(theSet.X_Coord-14,theSet.Y_Coord-14,28,28);
+            rectangle(frame,r,Scalar(255,0,0),1,8,0);
+        }
+
+        imshow("edges", frame);
+        char c = waitKey(5);
+
+        if (c == 'c') {
+            switch (image_cap_sm) {
+                case 0:
+                    image_cap_sm++;
+                    imwrite("ref.tif",frame);
+                    break;
+                case 1:
+                    image_cap_sm = 0;
+                    imwrite("def.tif",frame);
+                    run_2D_dic(schema);
+                    break;
+                default:
+                    image_cap_sm = 0;
+                    break;
+            }
+        }
+
+        if (c == 'q') {
+            break;
         }
     }
-
-    DICe::finalize();
-
-    if (errorFlag != 0)
-        std::cout << "End Result: TEST FAILED\n";
-    else
-        std::cout << "End Result: TEST PASSED\n";
-
+    // the camera will be deinitialized automatically in VideoCapture destructor
+    cout << "Program End\n";
     return 0;
 }
 
