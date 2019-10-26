@@ -43,7 +43,7 @@ list <SubsetData> subSets;
 static DICe::Schema dic_init(int argc, char *argv[]);
 static void run_2D_dic(DICe::Schema schema);
 bool updateListElement(SubsetData* update);
-static void load_2D_data(DICe::Schema schema);
+static void load_2D_data(DICe::Schema *schema);
 
 
 static DICe::Schema dic_init(int argc, char *argv[])
@@ -79,40 +79,40 @@ static DICe::Schema dic_init(int argc, char *argv[])
     // The schema constructor would then be
     //
     // DICe::Schema("ref.tif","def.tif",params);
+    load_2D_data(&schema);
+
+    return schema;
+}
+
+static void load_2D_data(DICe::Schema *schema)
+{
     //
     // STEP 2:
     //
     // set the reference and deformed images
     //
-    schema.set_ref_image("ref.tif");
-    schema.set_def_image("def.tif");
+    schema->set_ref_image("ref.tif");
+    schema->set_def_image("def.tif");
     //
     // There are also set methods that take DICe::Images as input arguments or pointers to arrays of intensity values.
     // See DICe::Schema.h for these methods
-    schema.print_fields();
-    std::cout << "HK:" << schema.local_num_subsets() << std::endl;
-    for(int subset_idx = 0;subset_idx<schema.local_num_subsets();subset_idx++){
+    schema->print_fields();
+    std::cout << "HK:" << schema->local_num_subsets() << std::endl;
+    for(int subset_idx = 0;subset_idx<schema->local_num_subsets();subset_idx++){
         stringstream sx;
         stringstream sy;
         stringstream ss;
-        sx << schema.mesh()->get_field(schema.mesh()->get_field_spec("COORDINATE_X"))->local_value(subset_idx);
-        sy << schema.mesh()->get_field(schema.mesh()->get_field_spec("COORDINATE_Y"))->local_value(subset_idx);
+        sx << schema->mesh()->get_field(schema->mesh()->get_field_spec("COORDINATE_X"))->local_value(subset_idx);
+        sy << schema->mesh()->get_field(schema->mesh()->get_field_spec("COORDINATE_Y"))->local_value(subset_idx);
         SubsetData newOne(stoi(sx.str()),
                           stoi(sy.str()),
-                          schema.subset_dim());
+                          schema->subset_dim());
         newOne.Subset_Idx = subset_idx;
         subSets.push_front(newOne);
         std::cout << "HK: X:      " << newOne.X_Coord << std::endl;
         std::cout << "HK: Y:      " << newOne.Y_Coord << std::endl;
         std::cout << "HK: Subset: " << newOne.Subset_Size << std::endl;
     }
-
-    return schema;
-}
-
-static void load_2D_data(DICe::Schema schema)
-{
-
 }
 
 static void run_2D_dic(DICe::Schema schema)
@@ -148,21 +148,21 @@ static void run_2D_dic(DICe::Schema schema)
     // Direct access to field values in the schema
     // schema.field_value( global_subset_id, field_name)
     for(int subset_idx = 0;subset_idx<schema.local_num_subsets();subset_idx++) {
-//        SubsetData update_Data(0,0,0);
-//        update_Data.Subset_Idx = subset_idx;
-//        update_Data.displacement_x = schema.local_field_value(subset_idx, SUBSET_DISPLACEMENT_X_FS);
-//        update_Data.displacement_y = schema.local_field_value(subset_idx, SUBSET_DISPLACEMENT_Y_FS);
-//        update_Data.displacement_z = 0;
-//
-//        std::cout << "The DISPLACEMENT_X field value for subset " << subset_idx << " is "
-//                  << update_Data.displacement_x << std::endl;
-//        std::cout << "The DISPLACEMENT_Y field value for subset " << subset_idx << " is "
-//                  << update_Data.displacement_y << std::endl;
-//        updateListElement(&update_Data);
+        SubsetData update_Data(0,0,0);
+        update_Data.Subset_Idx = subset_idx;
+        update_Data.displacement_x = schema.local_field_value(subset_idx, SUBSET_DISPLACEMENT_X_FS);
+        update_Data.displacement_y = schema.local_field_value(subset_idx, SUBSET_DISPLACEMENT_Y_FS);
+        update_Data.displacement_z = 0;
+
         std::cout << "The DISPLACEMENT_X field value for subset " << subset_idx << " is "
-                  << schema.local_field_value(subset_idx, SUBSET_DISPLACEMENT_X_FS) << std::endl;
+                  << update_Data.displacement_x << std::endl;
         std::cout << "The DISPLACEMENT_Y field value for subset " << subset_idx << " is "
-                  << schema.local_field_value(subset_idx, SUBSET_DISPLACEMENT_Y_FS) << std::endl;
+                  << update_Data.displacement_y << std::endl;
+        updateListElement(&update_Data);
+//        std::cout << "The DISPLACEMENT_X field value for subset " << subset_idx << " is "
+//                  << schema.local_field_value(subset_idx, SUBSET_DISPLACEMENT_X_FS) << std::endl;
+//        std::cout << "The DISPLACEMENT_Y field value for subset " << subset_idx << " is "
+//                  << schema.local_field_value(subset_idx, SUBSET_DISPLACEMENT_Y_FS) << std::endl;
     }
     // The field_value() method can be used to set the value as well,
     // for example if you wanted to move subset 0 to a new x-location, the syntax would be
@@ -229,7 +229,7 @@ int main(int argc, char *argv[]) {
             //FIXME: We need to get the size from the file
             Rect r=Rect(theSet.X_Coord-(theSet.Subset_Size/2),theSet.Y_Coord-(theSet.Subset_Size/2),theSet.Subset_Size,theSet.Subset_Size);
             rectangle(show_frame,r,Scalar(255,0,0),1,8,0);
-//            arrowedLine(show_frame,Point(theSet.X_Coord,theSet.Y_Coord),Point(theSet.X_Coord+(theSet.displacement_x*1000),theSet.Y_Coord+(theSet.displacement_y*1000)),Scalar(0, 255, 0), 1, 8, 0, 0.1);
+            arrowedLine(show_frame,Point(theSet.X_Coord,theSet.Y_Coord),Point(theSet.X_Coord+(theSet.displacement_x*-100),theSet.Y_Coord+(theSet.displacement_y*-100)),Scalar(0, 255, 0), 1, 8, 0, 0.1);
         }
 
         imshow("edges", show_frame);
@@ -239,19 +239,19 @@ int main(int argc, char *argv[]) {
             switch (image_cap_sm) {
                 case 0:
                     image_cap_sm++;
-                    std::cout << "Obtain first image\n";
                     imwrite("ref.tif",frame);
+                    std::cout << "Obtain first image\n";
                     break;
                 case 1:
                     image_cap_sm = 0;
-                    std::cout << "Obtain second image\n";
                     imwrite("def.tif",frame);
+                    std::cout << "Obtain second image\n";
                     run_2D_dic(schema);
                     break;
                 case 2:
                     image_cap_sm = 3;
                     std::cout << "Load the data\n";
-                    load_2D_data(schema);
+                    load_2D_data(&schema);
                     break;
                 case 3:
                     image_cap_sm = 0;
