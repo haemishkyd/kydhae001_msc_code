@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <string>
+#include <chrono>
 
 // DICe includes for classes used below:
 #include <DICe.h>
@@ -20,7 +21,8 @@ using namespace cv;
 float Brightness;
 float FrameWidth;
 float FrameHeight;
-class SubsetData{
+
+class SubsetData {
 public:
     int Subset_Idx;
     int X_Coord;
@@ -31,23 +33,25 @@ public:
     double displacement_y;
     double displacement_z;
 
-    SubsetData(int x,int y,int s) {     // Constructor
+    SubsetData(int x, int y, int s) {     // Constructor
         X_Coord = x;
         Y_Coord = y;
         Subset_Size = s;
     }
 };
 
-list <SubsetData> subSets;
+list<SubsetData> subSets;
 
 static DICe::Schema dic_init(int argc, char *argv[]);
+
 static void run_2D_dic(DICe::Schema schema);
-bool updateListElement(SubsetData* update);
+
+bool updateListElement(SubsetData *update);
+
 static void load_2D_data(DICe::Schema *schema);
 
 
-static DICe::Schema dic_init(int argc, char *argv[])
-{
+static DICe::Schema dic_init(int argc, char *argv[]) {
     //
     // STEP 0: initialize threading, etc if it is enabled
     //
@@ -79,13 +83,11 @@ static DICe::Schema dic_init(int argc, char *argv[])
     // The schema constructor would then be
     //
     // DICe::Schema("ref.tif","def.tif",params);
-    load_2D_data(&schema);
 
     return schema;
 }
 
-static void load_2D_data(DICe::Schema *schema)
-{
+static void load_2D_data(DICe::Schema *schema) {
     //
     // STEP 2:
     //
@@ -98,7 +100,8 @@ static void load_2D_data(DICe::Schema *schema)
     // See DICe::Schema.h for these methods
     schema->print_fields();
     std::cout << "HK:" << schema->local_num_subsets() << std::endl;
-    for(int subset_idx = 0;subset_idx<schema->local_num_subsets();subset_idx++){
+    subSets.clear();
+    for (int subset_idx = 0; subset_idx < schema->local_num_subsets(); subset_idx++) {
         stringstream sx;
         stringstream sy;
         stringstream ss;
@@ -115,8 +118,7 @@ static void load_2D_data(DICe::Schema *schema)
     }
 }
 
-static void run_2D_dic(DICe::Schema schema)
-{
+static void run_2D_dic(DICe::Schema schema) {
     //
     // STEP 3:
     //
@@ -147,8 +149,8 @@ static void run_2D_dic(DICe::Schema schema)
     //
     // Direct access to field values in the schema
     // schema.field_value( global_subset_id, field_name)
-    for(int subset_idx = 0;subset_idx<schema.local_num_subsets();subset_idx++) {
-        SubsetData update_Data(0,0,0);
+    for (int subset_idx = 0; subset_idx < schema.local_num_subsets(); subset_idx++) {
+        SubsetData update_Data(0, 0, 0);
         update_Data.Subset_Idx = subset_idx;
         update_Data.displacement_x = schema.local_field_value(subset_idx, SUBSET_DISPLACEMENT_X_FS);
         update_Data.displacement_y = schema.local_field_value(subset_idx, SUBSET_DISPLACEMENT_Y_FS);
@@ -159,10 +161,6 @@ static void run_2D_dic(DICe::Schema schema)
         std::cout << "The DISPLACEMENT_Y field value for subset " << subset_idx << " is "
                   << update_Data.displacement_y << std::endl;
         updateListElement(&update_Data);
-//        std::cout << "The DISPLACEMENT_X field value for subset " << subset_idx << " is "
-//                  << schema.local_field_value(subset_idx, SUBSET_DISPLACEMENT_X_FS) << std::endl;
-//        std::cout << "The DISPLACEMENT_Y field value for subset " << subset_idx << " is "
-//                  << schema.local_field_value(subset_idx, SUBSET_DISPLACEMENT_Y_FS) << std::endl;
     }
     // The field_value() method can be used to set the value as well,
     // for example if you wanted to move subset 0 to a new x-location, the syntax would be
@@ -171,17 +169,14 @@ static void run_2D_dic(DICe::Schema schema)
     DICe::finalize();
 }
 
-bool updateListElement(SubsetData* update)
-{
-    std::list <SubsetData>::iterator iObject;
-    for (iObject= subSets.begin(); iObject != subSets.end(); ++iObject)
-    {
+bool updateListElement(SubsetData *update) {
+    std::list<SubsetData>::iterator iObject;
+    for (iObject = subSets.begin(); iObject != subSets.end(); ++iObject) {
         SubsetData temp = *iObject;
-        if (temp.Subset_Idx == update->Subset_Idx)
-        {
-            update->Y_Coord=iObject->Y_Coord;
-            update->X_Coord=iObject->X_Coord;
-            update->Subset_Size=iObject->Subset_Size;
+        if (temp.Subset_Idx == update->Subset_Idx) {
+            update->Y_Coord = iObject->Y_Coord;
+            update->X_Coord = iObject->X_Coord;
+            update->Subset_Size = iObject->Subset_Size;
             *iObject = *update;
             return true;
         }
@@ -191,11 +186,10 @@ bool updateListElement(SubsetData* update)
 
 int main(int argc, char *argv[]) {
 
+    int image_cap_sm = 0;
+    DICe::Schema schema;
+
     std::cout << "Begin masters DICe program\n";
-
-   int image_cap_sm = 0;
-
-    DICe::Schema schema = dic_init(argc, argv);
 
     VideoCapture cap(0); // open the default camera
 
@@ -208,7 +202,6 @@ int main(int argc, char *argv[]) {
     cout << "Default Width      -------> " << FrameWidth << endl;
     cout << "Default Height     -------> " << FrameHeight << endl;
     cout << "====================================" << endl;
-
 
     if (!cap.isOpened()) {  // check if we succeeded
         std::cout << "No camera can be found\n";
@@ -223,13 +216,14 @@ int main(int argc, char *argv[]) {
         Mat frame;
         Mat show_frame;
         cap >> frame; // get a new frame from camera
-        show_frame=frame.clone();
-        for (const SubsetData & theSet : subSets)
-        {
-            //FIXME: We need to get the size from the file
-            Rect r=Rect(theSet.X_Coord-(theSet.Subset_Size/2),theSet.Y_Coord-(theSet.Subset_Size/2),theSet.Subset_Size,theSet.Subset_Size);
-            rectangle(show_frame,r,Scalar(255,0,0),1,8,0);
-            arrowedLine(show_frame,Point(theSet.X_Coord,theSet.Y_Coord),Point(theSet.X_Coord+(theSet.displacement_x*-100),theSet.Y_Coord+(theSet.displacement_y*-100)),Scalar(0, 255, 0), 1, 8, 0, 0.1);
+        show_frame = frame.clone();
+        for (const SubsetData &theSet : subSets) {
+            Rect r = Rect(theSet.X_Coord - (theSet.Subset_Size / 2), theSet.Y_Coord - (theSet.Subset_Size / 2),
+                          theSet.Subset_Size, theSet.Subset_Size);
+            rectangle(show_frame, r, Scalar(255, 0, 0), 1, 8, 0);
+            arrowedLine(show_frame, Point(theSet.X_Coord, theSet.Y_Coord),
+                        Point(theSet.X_Coord + (theSet.displacement_x * 100.0),
+                              theSet.Y_Coord + (theSet.displacement_y * 100.0)), Scalar(0, 255, 0), 1, 8, 0, 0.1);
         }
 
         imshow("edges", show_frame);
@@ -238,25 +232,24 @@ int main(int argc, char *argv[]) {
         if (c == 'c') {
             switch (image_cap_sm) {
                 case 0:
-                    image_cap_sm++;
-                    imwrite("ref.tif",frame);
+                    image_cap_sm = 1;
+                    imwrite("ref.tif", frame);
                     std::cout << "Obtain first image\n";
                     break;
                 case 1:
                     image_cap_sm = 0;
-                    imwrite("def.tif",frame);
+                    imwrite("def.tif", frame);
                     std::cout << "Obtain second image\n";
-                    run_2D_dic(schema);
-                    break;
-                case 2:
-                    image_cap_sm = 3;
-                    std::cout << "Load the data\n";
+                case 2: {
+                    auto start = std::chrono::high_resolution_clock::now();
+                    schema = dic_init(argc, argv);
                     load_2D_data(&schema);
-                    break;
-                case 3:
-                    image_cap_sm = 0;
                     run_2D_dic(schema);
+                    auto finish = std::chrono::high_resolution_clock::now();
+                    std::cout << "Completed in: "
+                              << std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count() << "ns\n";
                     break;
+                }
                 default:
                     image_cap_sm = 0;
                     break;
