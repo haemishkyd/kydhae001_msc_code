@@ -15,12 +15,16 @@
 // See the custom_app example in the tutorial for more information about the code below
 
 using namespace DICe::field_enums;
+using namespace DICe;
 using namespace std;
 using namespace cv;
 
 float Brightness;
 float FrameWidth;
 float FrameHeight;
+
+Mat refImage;
+Mat defImage;
 
 class SubsetData {
 public:
@@ -93,8 +97,28 @@ static void load_2D_data(DICe::Schema *schema) {
     //
     // set the reference and deformed images
     //
-    schema->set_ref_image("ref.tif");
-    schema->set_def_image("def.tif");
+    //    schema->set_ref_image("ref.tif");
+    //    schema->set_def_image("def.tif");
+    /* We are going to attempt to load the files using data in memory instead of writing the files to the drive */
+
+    double refRCP[(int) (FrameHeight * FrameWidth)];
+    double defRCP[(int) (FrameHeight * FrameWidth)];
+
+    for (int img_idx = 0; img_idx < FrameHeight * FrameWidth; img_idx++) {
+        refRCP[img_idx] = refImage.data[img_idx];
+        defRCP[img_idx] = defImage.data[img_idx];
+    }
+    {
+        int_t l_width = FrameWidth;
+        int_t l_height = FrameHeight;
+
+        Teuchos::ArrayRCP<double> fRefRCP(refRCP, 0, FrameHeight * FrameWidth, false);
+        Teuchos::ArrayRCP<double> fDefRCP(defRCP, 0, FrameHeight * FrameWidth, false);
+
+        schema->set_ref_image(l_width, l_height, fRefRCP);
+        schema->set_def_image(l_width, l_height, fDefRCP, 0);
+    }
+
     //
     // There are also set methods that take DICe::Images as input arguments or pointers to arrays of intensity values.
     // See DICe::Schema.h for these methods
@@ -234,11 +258,13 @@ int main(int argc, char *argv[]) {
                 case 0:
                     image_cap_sm = 1;
                     imwrite("ref.tif", frame);
+                    refImage = frame.clone();
                     std::cout << "Obtain first image\n";
                     break;
                 case 1:
                     image_cap_sm = 0;
                     imwrite("def.tif", frame);
+                    defImage = frame.clone();
                     std::cout << "Obtain second image\n";
                 case 2: {
                     auto start = std::chrono::high_resolution_clock::now();
@@ -247,7 +273,8 @@ int main(int argc, char *argv[]) {
                     run_2D_dic(schema);
                     auto finish = std::chrono::high_resolution_clock::now();
                     std::cout << "Completed in: "
-                              << std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count() << "ns\n";
+                              << std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count()
+                              << "ns\n";
                     break;
                 }
                 default:

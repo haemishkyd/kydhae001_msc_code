@@ -5,5 +5,6 @@
 -DDICE_HEADER_DIR:FILEPATH=~/Masters/CodeRepo/dice/build/install/include;~/Masters/CodeRepo/dice/src/base;~/Masters/CodeRepo/dice/src/base;~/Masters/CodeRepo/dice/src/core;~/Masters/CodeRepo/dice/src/kdtree;~/Masters/CodeRepo/dice/src/global;~/Masters/CodeRepo/dice/src/mesh
 -DDICE_ENABLE_GLOBAL:BOOL=ON
 -DDICE_ENABLE_OPENCV:BOOL=ON
+-DDICE_USE_DOUBLE:BOOL=ON
 -DOpenCV_DIR:PATH=~/Masters/CodeRepo/opencv-3.2.0/build/install
 -DOpenCV_LIBRARIES=opencv;core;opencv_imgproc;opencv_highgui;opencv_imgcodecs;opencv_video;opencv_videoio
