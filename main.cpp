@@ -97,16 +97,18 @@ static void load_2D_data(DICe::Schema *schema) {
     //
     // set the reference and deformed images
     //
-    //    schema->set_ref_image("ref.tif");
-    //    schema->set_def_image("def.tif");
+//        schema->set_ref_image("ref.tif");
+//        schema->set_def_image("def.tif");
     /* We are going to attempt to load the files using data in memory instead of writing the files to the drive */
 
     double refRCP[(int) (FrameHeight * FrameWidth)];
     double defRCP[(int) (FrameHeight * FrameWidth)];
 
     for (int img_idx = 0; img_idx < FrameHeight * FrameWidth; img_idx++) {
-        refRCP[img_idx] = refImage.data[img_idx];
-        defRCP[img_idx] = defImage.data[img_idx];
+        refRCP[img_idx] = refImage.data[img_idx * 3] * 0.11 + refImage.data[img_idx * 3 + 1] * 0.59 +
+                          refImage.data[img_idx * 3 + 2] * 0.30;
+        defRCP[img_idx] = defImage.data[img_idx * 3] * 0.11 + defImage.data[img_idx * 3 + 1] * 0.59 +
+                          defImage.data[img_idx * 3 + 2] * 0.30;
     }
     {
         int_t l_width = FrameWidth;
@@ -211,6 +213,10 @@ bool updateListElement(SubsetData *update) {
 int main(int argc, char *argv[]) {
 
     int image_cap_sm = 0;
+    int thickness = 1;
+    double Total_X_Displacement[3] = {0.0, 0.0, 0.0};
+    double Total_Y_Displacement[3] = {0.0, 0.0, 0.0};
+    std::chrono::time_point<std::chrono::high_resolution_clock> timer_start, timer_end, main_timer;
     DICe::Schema schema;
 
     std::cout << "Begin masters DICe program\n";
@@ -236,55 +242,74 @@ int main(int argc, char *argv[]) {
 
     Mat edges;
     namedWindow("edges", 1);
+    main_timer = std::chrono::high_resolution_clock::now();
     for (;;) {
+        int ti = 0;
         Mat frame;
         Mat show_frame;
         cap >> frame; // get a new frame from camera
         show_frame = frame.clone();
-        for (const SubsetData &theSet : subSets) {
+        for (SubsetData &theSet : subSets) {
             Rect r = Rect(theSet.X_Coord - (theSet.Subset_Size / 2), theSet.Y_Coord - (theSet.Subset_Size / 2),
                           theSet.Subset_Size, theSet.Subset_Size);
             rectangle(show_frame, r, Scalar(255, 0, 0), 1, 8, 0);
+
             arrowedLine(show_frame, Point(theSet.X_Coord, theSet.Y_Coord),
-                        Point(theSet.X_Coord + (theSet.displacement_x * 100.0),
-                              theSet.Y_Coord + (theSet.displacement_y * 100.0)), Scalar(0, 255, 0), 1, 8, 0, 0.1);
+                        Point(theSet.X_Coord + (theSet.displacement_x * 10),
+                              theSet.Y_Coord + (theSet.displacement_y * 10)), Scalar(0, 255, 0), 1, 8, 0, 0.1);
+            Total_X_Displacement[ti] += theSet.displacement_x;
+            Total_Y_Displacement[ti] += theSet.displacement_y;
+            thickness = (int) (sqrt(pow(Total_X_Displacement[ti], 2) + pow(Total_Y_Displacement[ti], 2)) / 10);
+            if (thickness < 1) {
+                thickness = 1;
+            }
+            arrowedLine(show_frame, Point(theSet.X_Coord, theSet.Y_Coord),
+                        Point(theSet.X_Coord + (Total_X_Displacement[ti]),
+                              theSet.Y_Coord + (Total_Y_Displacement[ti])), Scalar(0, 0, 255), thickness, 8, 0, 0.1);
+            ti++;
         }
 
         imshow("edges", show_frame);
         char c = waitKey(5);
 
-        if (c == 'c') {
+        if ((c == 'c') || (std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::high_resolution_clock::now() - main_timer).count() > 200)) {
             switch (image_cap_sm) {
                 case 0:
+                    timer_start = std::chrono::high_resolution_clock::now();
                     image_cap_sm = 1;
-                    imwrite("ref.tif", frame);
+//                    imwrite("ref.tif", frame);
                     refImage = frame.clone();
                     std::cout << "Obtain first image\n";
                     break;
                 case 1:
                     image_cap_sm = 0;
-                    imwrite("def.tif", frame);
+//                    imwrite("def.tif", frame);
                     defImage = frame.clone();
                     std::cout << "Obtain second image\n";
-                case 2: {
-                    auto start = std::chrono::high_resolution_clock::now();
                     schema = dic_init(argc, argv);
                     load_2D_data(&schema);
                     run_2D_dic(schema);
-                    auto finish = std::chrono::high_resolution_clock::now();
+                    timer_end = std::chrono::high_resolution_clock::now();
                     std::cout << "Completed in: "
-                              << std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count()
-                              << "ns\n";
+                              << std::chrono::duration_cast<std::chrono::milliseconds>(timer_end - timer_start).count()
+                              << "ms\n";
                     break;
-                }
                 default:
                     image_cap_sm = 0;
                     break;
             }
+            main_timer = std::chrono::high_resolution_clock::now();
         }
 
         if (c == 'q') {
             break;
+        }
+        if (c == 'r') {
+            for (int reset_idx = 0; reset_idx < 3; reset_idx++) {
+                Total_X_Displacement[reset_idx] = 0;
+                Total_Y_Displacement[reset_idx] = 0;
+            }
         }
     }
     // the camera will be deinitialized automatically in VideoCapture destructor
