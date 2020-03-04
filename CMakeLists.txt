@@ -103,9 +103,9 @@ ENDIF()
 MESSAGE(STATUS "Using DICe headers from: ${DICE_HEADER_DIR}")
 include_directories(${DICE_HEADER_DIR})
 
-add_executable(masters_v1 main.cpp)
+add_executable(masters_v3 main.cpp)
 # add the dice libraries
-target_link_libraries(masters_v1
+target_link_libraries(masters_v3
   dicecore
 )
 #
@@ -122,7 +122,7 @@ target_link_libraries(masters_v1
 #  MESSAGE(STATUS "Using tiff library from: ${tiff_lib}")
 #  target_link_libraries(main diceutils ${tiff_lib})
 #endif()
-target_link_libraries(masters_v1 diceutils)
+target_link_libraries(masters_v3 diceutils)
 
 # NOTE: If this example is used as a template, the optional JPEG_DIR variable can be defined
 # in your do-cmake script with -D JPEG_DIR:STRING="<location>" only if libjpeg is not
@@ -172,19 +172,19 @@ ENDIF()
 
 IF(DICE_ENABLE_GLOBAL)
   add_definitions(-DDICE_ENABLE_GLOBAL=1)
-  target_link_libraries(masters_v1
+  target_link_libraries(masters_v3
   exodus
   ifpack
   belos)
 ENDIF()
 
 IF(DICE_ENABLE_OPENCV)
-  target_link_libraries(masters_v1
+  target_link_libraries(masters_v3
     ${OpenCV_LIBRARIES})
 ENDIF()
   
 # add the other libraries needed
-target_link_libraries(masters_v1
+target_link_libraries(masters_v3
   teuchoscore
   teuchosnumerics
   teuchoscomm
@@ -193,7 +193,7 @@ target_link_libraries(masters_v1
 )
 
 IF(DICE_ENABLE_MANYCORE)
-  target_link_libraries(masters_v1
+  target_link_libraries(masters_v3
     tpetra
     kokkoscore
     ifpack
@@ -201,10 +201,10 @@ IF(DICE_ENABLE_MANYCORE)
   )
   ADD_DEFINITIONS(-DDICE_KOKKOS=1 -DDICE_TPETRA=1)
 ELSE()
-  target_link_libraries(masters_v1
+  target_link_libraries(masters_v3
   epetra)
   IF(DICE_ENABLE_GLOBAL)
-    target_link_libraries(masters_v1
+    target_link_libraries(masters_v3
       belosepetra)
   ENDIF()
 ENDIF()
