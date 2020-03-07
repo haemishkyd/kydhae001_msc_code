@@ -56,6 +56,7 @@
 #  include <mpi.h>
 #endif
 
+using namespace DICe::field_enums;
 using namespace DICe;
 
 int main(int argc, char *argv[]) {
@@ -386,6 +387,14 @@ int main(int argc, char *argv[]) {
             else
                 *outStream << "\n--- Successful Completion ---\n" << std::endl;
 
+            for (int subset_idx = 0; subset_idx < schema->local_num_subsets(); subset_idx++) {
+                std::cout << "The DISPLACEMENT_X field value for subset " << subset_idx << " is "
+                          << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_X_FS) << std::endl;
+                std::cout << "The DISPLACEMENT_Y field value for subset " << subset_idx << " is "
+                          << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Y_FS) << std::endl;
+                std::cout << "The DISPLACEMENT_Z field value for subset " << subset_idx << " is "
+                          << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Z_FS) << std::endl;
+            }
             // output timing
         } // end scope for total time
         // print the timing data with or without verbose flag
@@ -402,11 +411,13 @@ int main(int argc, char *argv[]) {
             std::remove(timeFileName.str().c_str());
 
         DICe::finalize();
+
     }
     catch(std::exception & e){
         std::cout << e.what() << std::endl;
         return 1;
     }
+
 
     return 0;
 }
