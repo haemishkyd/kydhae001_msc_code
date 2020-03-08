@@ -80,25 +80,17 @@ int main(int argc, char *argv[]) {
         { // scope for total time
             Teuchos::TimeMonitor total_time_monitor(*total_time);
             std::cout << "Start of process." << std::endl;
-            // Command line options
+
             if(proc_rank==0)  DEBUG_MSG("Parsing command line options");
             bool force_exit = false;
-            //input_params = DICe::parse_command_line(argc,argv,force_exit,outStream);
+
+            // Get the input parameters
+
             input_params = Teuchos::rcp( new Teuchos::ParameterList() );
             Teuchos::Ptr<Teuchos::ParameterList> inputParamsPtr(input_params.get());
             Teuchos::updateParametersFromXmlFile("input.xml", inputParamsPtr);
             TEUCHOS_TEST_FOR_EXCEPTION(input_params==Teuchos::null,std::runtime_error,"");
 
-            if(force_exit){
-                // exit gracefully:
-                DICe::finalize();
-                if(input_params->isParameter("debug_msg_on")){
-                    if(input_params->get<bool>("debug_msg_on")){
-                        return 1;
-                    }
-                }
-                return 0;
-            }
             *outStream << "Input Parameters: " << std::endl;
             input_params->print(*outStream);
             *outStream << "\n--- Input read successfully ---\n" << std::endl;
@@ -123,17 +115,6 @@ int main(int argc, char *argv[]) {
                 *outStream << "Correlation parameters not specified by user" << std::endl;
             }
 
-            // if the mesh size was specified in the input params set the use_global_dic flag
-            if(input_params->isParameter(DICe::mesh_size)||input_params->isParameter(DICe::mesh_file)){
-#ifdef DICE_ENABLE_GLOBAL
-                if(correlation_params==Teuchos::null) correlation_params = Teuchos::rcp(new Teuchos::ParameterList());
-                correlation_params->set(DICe::use_global_dic,true);
-#else
-                TEUCHOS_TEST_FOR_EXCEPTION(true,std::runtime_error,"Error, global method requested, but code"
-          " was not built with DICE_ENABLE_GLOBAL");
-#endif
-            }
-
             // decipher the image file names (note: zero entry is the reference image):
 
             std::vector<std::string> image_files;
@@ -145,24 +126,15 @@ int main(int argc, char *argv[]) {
             int_t first_frame_id = 0;
             int_t image_width = 0;
             int_t image_height = 0;
-            const bool is_cine = utils::image_file_type(image_files[0].c_str()) == CINE;
+
             bool filter_failed_pixels = false;
-            if(is_cine){
-                int_t s_id = 0, e_id = 0;
-                bool is_avg = false;
-                utils::cine_index(image_files[0].c_str(),s_id,e_id,is_avg);
-                first_frame_id = s_id;
-                filter_failed_pixels = correlation_params->get<bool>(DICe::filter_failed_cine_pixels,false);
-                utils::Image_Reader_Cache::instance().set_filter_failed_pixels(filter_failed_pixels);
+
+            if(input_params->isParameter(DICe::start_image_index)){
+                first_frame_id = input_params->get<int_t>(DICe::start_image_index);
+            }else if(input_params->isParameter(DICe::reference_image_index)){
+                first_frame_id = input_params->get<int_t>(DICe::reference_image_index);
             }
-            else  // non-cine input
-            {
-                if(input_params->isParameter(DICe::start_image_index)){
-                    first_frame_id = input_params->get<int_t>(DICe::start_image_index);
-                }else if(input_params->isParameter(DICe::reference_image_index)){
-                    first_frame_id = input_params->get<int_t>(DICe::reference_image_index);
-                }
-            }
+
             TEUCHOS_TEST_FOR_EXCEPTION(num_frames<=0,std::runtime_error,"");
             *outStream << "Reference image: " << image_files[0] << std::endl;
             for(int_t i=1;i<=num_frames;++i){
@@ -197,51 +169,17 @@ int main(int argc, char *argv[]) {
             // let the schema know how many images there are in the sequence and the first frame id:
             schema->set_frame_range(first_frame_id,num_frames);
 
-            if(input_params->get<bool>(DICe::print_subset_locations_and_exit,false)){
-                // write out the subset locations for left camera and exit
-                Teuchos::RCP<MultiField> coords = schema->mesh()->get_field(DICe::field_enums::INITIAL_COORDINATES_FS);
-                const int_t ss_locs_size = proc_rank==0 ?
-                                           coords->get_map()->get_num_global_elements() : 0; // both x and y coords
-                Teuchos::Array<int_t> owned_ids(ss_locs_size);
-                for(int_t i=0;i<ss_locs_size;++i)
-                    owned_ids[i] = i;
-                Teuchos::RCP<MultiField_Map> zero_map = Teuchos::rcp (new MultiField_Map(-1, owned_ids,0,*schema->mesh()->get_comm()));
-                Teuchos::RCP<MultiField> all_on_zero_coords = Teuchos::rcp( new MultiField(zero_map,1,true));
-                // all to zero gather of coordinates
-                MultiField_Exporter exporter(*zero_map,*coords->get_map());
-                // export the field to zero
-                all_on_zero_coords->do_import(coords,exporter);
-                //all_on_zero_coords->describe();
-                if(proc_rank==0){
-                    std::FILE * ssFile = fopen("subset_locs.txt","w");
-                    for(int_t i=0;i<ss_locs_size/2;++i){
-                        fprintf(ssFile,"%i %i\n",(int_t)all_on_zero_coords->local_value(i*2+0),(int_t)all_on_zero_coords->local_value(i*2+1));
-                    }
-                    fclose(ssFile);
-                }
-                DICe::finalize();
-                return 0;
+            //This is local DIC not global
+            *outStream << "Number of global subsets: " << schema->global_num_subsets() << std::endl;
+            for(int_t i=0;i<schema->local_num_subsets();++i){
+                if(i==10&&schema->local_num_subsets()!=11) *outStream << "..." << std::endl;
+                else if(i>10&&i<schema->local_num_subsets()-1) continue;
+                else
+                    *outStream << "Proc 0: subset global id: " << schema->subset_global_id(i) << " global coordinates (" << schema->local_field_value(i,DICe::field_enums::SUBSET_COORDINATES_X_FS) <<
+                               "," << schema->local_field_value(i,DICe::field_enums::SUBSET_COORDINATES_Y_FS) << ")" << std::endl;
             }
+            *outStream << std::endl;
 
-            if(schema->analysis_type()==LOCAL_DIC){
-                *outStream << "Number of global subsets: " << schema->global_num_subsets() << std::endl;
-                for(int_t i=0;i<schema->local_num_subsets();++i){
-                    if(i==10&&schema->local_num_subsets()!=11) *outStream << "..." << std::endl;
-                    else if(i>10&&i<schema->local_num_subsets()-1) continue;
-                    else
-                        *outStream << "Proc 0: subset global id: " << schema->subset_global_id(i) << " global coordinates (" << schema->local_field_value(i,DICe::field_enums::SUBSET_COORDINATES_X_FS) <<
-                                   "," << schema->local_field_value(i,DICe::field_enums::SUBSET_COORDINATES_Y_FS) << ")" << std::endl;
-                }
-                *outStream << std::endl;
-            } // end local dic
-            else if(schema->analysis_type()==GLOBAL_DIC){
-#ifdef DICE_ENABLE_GLOBAL
-                *outStream << "Global formulation mesh stats:" << std::endl;
-                *outStream << "Mesh size:          " << schema->global_algorithm()->mesh_size() << std::endl;
-                *outStream << "Number of nodes:    " << schema->global_algorithm()->mesh()->num_nodes() << std::endl;
-                *outStream << "Number of elements: " << schema->global_algorithm()->mesh()->num_elem() << std::endl;
-#endif
-            }  // end global dic
             std::string file_prefix = input_params->get<std::string>(DICe::output_prefix,"DICe_solution");
             std::string stereo_file_prefix = input_params->get<std::string>(DICe::output_prefix,"DICe_solution");
             stereo_file_prefix += "_stereo";
