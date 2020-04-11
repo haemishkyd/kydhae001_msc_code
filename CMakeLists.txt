@@ -103,7 +103,7 @@ ENDIF()
 MESSAGE(STATUS "Using DICe headers from: ${DICE_HEADER_DIR}")
 include_directories(${DICE_HEADER_DIR})
 
-add_executable(masters_v3 main.cpp)
+add_executable(masters_v3  SubSetData.cpp main.cpp)
 # add the dice libraries
 target_link_libraries(masters_v3
   dicecore

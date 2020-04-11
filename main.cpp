@@ -52,12 +52,18 @@
 #include <Teuchos_TimeMonitor.hpp>
 #include <Teuchos_XMLParameterListHelpers.hpp>
 
+#include "opencv2/opencv.hpp"
+
+#include "SubSetData.h"
+
 #if DICE_MPI
 #  include <mpi.h>
 #endif
 
 using namespace DICe::field_enums;
 using namespace DICe;
+using namespace cv;
+using namespace std;
 
 bool read_input_data_files(Teuchos::RCP<Teuchos::ParameterList> *l_input_params,
                            Teuchos::RCP<Teuchos::ParameterList> *l_correlation_params);
@@ -65,6 +71,11 @@ void run_cross_correlation(Teuchos::RCP<DICe::Schema> l_schema, Teuchos::RCP<DIC
                            Teuchos::RCP<DICe::Triangulation> *l_triangulation, Teuchos::RCP<Teuchos::ParameterList> *l_input_params,
                            Teuchos::RCP<Teuchos::ParameterList> *l_correlation_params,
                            std::vector<std::string> image_files, std::vector<std::string> stereo_image_files);
+bool run_correlation_and_triangulation(Teuchos::RCP<DICe::Schema> *l_schema, Teuchos::RCP<DICe::Schema> *l_stereo_schema, Teuchos::RCP<DICe::Triangulation> *l_triangulation,
+                                       Teuchos::RCP<Teuchos::ParameterList> *l_input_params,
+                                       Teuchos::RCP<Teuchos::ParameterList> *l_correlation_params, int image_it,
+                                       std::vector<std::string> image_files, std::vector<std::string> stereo_image_files);
+Teuchos::RCP<DICe::Schema> main_stereo_3d_correlation(int argc, char *argv[]);
 
 Teuchos::RCP<std::ostream> outStream;
 /**
@@ -74,7 +85,7 @@ Teuchos::RCP<Teuchos::Time> total_time = Teuchos::TimeMonitor::getNewCounter("##
 Teuchos::RCP<Teuchos::Time> cross_time = Teuchos::TimeMonitor::getNewCounter("Cross-correlation");
 Teuchos::RCP<Teuchos::Time> corr_time = Teuchos::TimeMonitor::getNewCounter("Correlation");
 Teuchos::RCP<Teuchos::Time> write_time = Teuchos::TimeMonitor::getNewCounter("Write Output");
-
+Mat frame1, frame2;
 
 bool read_input_data_files(Teuchos::RCP<Teuchos::ParameterList> *l_input_params,
                            Teuchos::RCP<Teuchos::ParameterList> *l_correlation_params) {
@@ -141,7 +152,76 @@ void run_cross_correlation(Teuchos::RCP<DICe::Schema> *l_schema, Teuchos::RCP<DI
     (*l_schema)->execute_triangulation(*l_triangulation, *l_stereo_schema);
 }
 
-int main(int argc, char *argv[]) {
+bool run_correlation_and_triangulation(Teuchos::RCP<DICe::Schema> *l_schema, Teuchos::RCP<DICe::Schema> *l_stereo_schema, Teuchos::RCP<DICe::Triangulation> *l_triangulation,
+                                       Teuchos::RCP<Teuchos::ParameterList> *l_input_params,
+                                       Teuchos::RCP<Teuchos::ParameterList> *l_correlation_params, int image_it,
+                                       std::vector<std::string> image_files, std::vector<std::string> stereo_image_files){
+    bool failed_step = false;
+    bool is_stereo = true; //This is definitely stereo
+
+    std::string file_prefix = (*l_input_params)->get<std::string>(DICe::output_prefix, "DICe_solution");
+    std::string stereo_file_prefix = (*l_input_params)->get<std::string>(DICe::output_prefix, "DICe_solution");
+    stereo_file_prefix += "_stereo";
+    const bool separate_header_file = (*l_input_params)->get<bool>(DICe::create_separate_run_info_file, false);
+
+    *outStream << "Processing frame: " << image_it << ", " << image_files[image_it]
+               << std::endl;
+    if ((*l_schema)->use_incremental_formulation() && image_it > 1) {
+        (*l_schema)->set_ref_image((*l_schema)->def_img());
+    }
+    (*l_schema)->update_extents();
+    (*l_schema)->set_def_image(image_files[image_it]);
+    if (is_stereo) {
+        if ((*l_stereo_schema)->use_incremental_formulation() && image_it > 1) {
+            (*l_stereo_schema)->set_ref_image((*l_stereo_schema)->def_img());
+        }
+        (*l_stereo_schema)->update_extents();
+        (*l_stereo_schema)->set_def_image(stereo_image_files[image_it]);
+        //if(stereo_schema->use_nonlinear_projection())
+        //  stereo_schema->project_right_image_into_left_frame(triangulation,false);
+    }
+    { // start the timer
+        Teuchos::TimeMonitor corr_time_monitor(*corr_time);
+        int_t corr_error = (*l_schema)->execute_correlation();
+        if (corr_error)
+            failed_step = true;
+        if (is_stereo) {
+            corr_error = (*l_stereo_schema)->execute_correlation();
+            if (corr_error)
+                failed_step = true;
+        }
+        (*l_schema)->execute_triangulation(*l_triangulation, (*l_stereo_schema));
+        (*l_schema)->execute_post_processors();
+    }
+    // write the output
+    const bool no_text_output = (*l_input_params)->get<bool>(DICe::no_text_output_files, false);
+    {
+        Teuchos::TimeMonitor write_time_monitor(*write_time);
+        (*l_schema)->write_output(output_folder, file_prefix, separate_output_file_for_each_subset,
+                             separate_header_file, no_text_output);
+        (*l_schema)->post_execution_tasks();
+        // print the timing data with or without verbose flag
+        if ((*l_input_params)->get<bool>(DICe::print_stats, false)) {
+            (*l_schema)->mesh()->print_field_stats();
+        }
+        //if(subset_info->conformal_area_defs!=Teuchos::null&&image_it==1){
+        //  schema->write_control_points_image("RegionOfInterest");
+        //}
+        if (is_stereo) {
+            if ((*l_input_params)->get<bool>(DICe::output_stereo_files, false)) {
+                (*l_stereo_schema)->write_output(output_folder, stereo_file_prefix,
+                                            separate_output_file_for_each_subset, separate_header_file,
+                                            no_text_output);
+            }
+            (*l_stereo_schema)->post_execution_tasks();
+        }
+    }
+    return  failed_step;
+}
+
+Teuchos::RCP<DICe::Schema> main_stereo_3d_correlation(int argc, char *argv[]){
+    Teuchos::RCP<DICe::Schema> schema;
+    Teuchos::RCP<DICe::Schema> stereo_schema;
 
     try {
         DICe::initialize(argc, argv);
@@ -210,14 +290,27 @@ int main(int argc, char *argv[]) {
             }
 
             /******* create schemas: */
-            Teuchos::RCP<DICe::Schema> schema = Teuchos::rcp(new DICe::Schema(input_params, correlation_params));
-            Teuchos::RCP<DICe::Schema> stereo_schema;
+            schema = Teuchos::rcp(new DICe::Schema(input_params, correlation_params));
             // let the schema know how many images there are in the sequence and the first frame id:
             schema->set_frame_range(first_frame_id, num_frames);
 
             /******* Set up the subsets */
             *outStream << "Number of global subsets: " << schema->global_num_subsets() << std::endl;
+            list<SubSetData> *subSets = getSubSets();
+            subSets->clear();
             for (int_t i = 0; i < schema->local_num_subsets(); ++i) {
+
+                stringstream sx;
+                stringstream sy;
+                stringstream ss;
+                sx << schema->mesh()->get_field(schema->mesh()->get_field_spec("COORDINATE_X"))->local_value(i);
+                sy << schema->mesh()->get_field(schema->mesh()->get_field_spec("COORDINATE_Y"))->local_value(i);
+                SubSetData newOne(stoi(sx.str()),
+                                  stoi(sy.str()),
+                                  schema->subset_dim());
+                newOne.Subset_Idx = i;
+                subSets->push_front(newOne);
+
                 if (i == 10 && schema->local_num_subsets() != 11) *outStream << "..." << std::endl;
                 else if (i > 10 && i < schema->local_num_subsets() - 1) continue;
                 else
@@ -266,61 +359,10 @@ int main(int argc, char *argv[]) {
             run_cross_correlation(&schema, &stereo_schema, &triangulation, &input_params, &correlation_params, image_files, stereo_image_files);
 
             // iterate through the images and perform the correlation:
-            bool failed_step = false;
+            bool failed_step;
 
             for (int_t image_it = 1; image_it <= num_frames; ++image_it) {
-                *outStream << "Processing frame: " << image_it << " of " << num_frames << ", " << image_files[image_it]
-                           << std::endl;
-                if (schema->use_incremental_formulation() && image_it > 1) {
-                    schema->set_ref_image(schema->def_img());
-                }
-                schema->update_extents();
-                schema->set_def_image(image_files[image_it]);
-                if (is_stereo) {
-                    if (stereo_schema->use_incremental_formulation() && image_it > 1) {
-                        stereo_schema->set_ref_image(stereo_schema->def_img());
-                    }
-                    stereo_schema->update_extents();
-                    stereo_schema->set_def_image(stereo_image_files[image_it]);
-                    //if(stereo_schema->use_nonlinear_projection())
-                    //  stereo_schema->project_right_image_into_left_frame(triangulation,false);
-                }
-                { // start the timer
-                    Teuchos::TimeMonitor corr_time_monitor(*corr_time);
-                    int_t corr_error = schema->execute_correlation();
-                    if (corr_error)
-                        failed_step = true;
-                    if (is_stereo) {
-                        corr_error = stereo_schema->execute_correlation();
-                        if (corr_error)
-                            failed_step = true;
-                    }
-                    schema->execute_triangulation(triangulation, stereo_schema);
-                    schema->execute_post_processors();
-                }
-                // write the output
-                const bool no_text_output = input_params->get<bool>(DICe::no_text_output_files, false);
-                {
-                    Teuchos::TimeMonitor write_time_monitor(*write_time);
-                    schema->write_output(output_folder, file_prefix, separate_output_file_for_each_subset,
-                                         separate_header_file, no_text_output);
-                    schema->post_execution_tasks();
-                    // print the timing data with or without verbose flag
-                    if (input_params->get<bool>(DICe::print_stats, false)) {
-                        schema->mesh()->print_field_stats();
-                    }
-                    //if(subset_info->conformal_area_defs!=Teuchos::null&&image_it==1){
-                    //  schema->write_control_points_image("RegionOfInterest");
-                    //}
-                    if (is_stereo) {
-                        if (input_params->get<bool>(DICe::output_stereo_files, false)) {
-                            stereo_schema->write_output(output_folder, stereo_file_prefix,
-                                                        separate_output_file_for_each_subset, separate_header_file,
-                                                        no_text_output);
-                        }
-                        stereo_schema->post_execution_tasks();
-                    }
-                }
+                failed_step = run_correlation_and_triangulation(&schema, &stereo_schema, &triangulation,&input_params, &correlation_params, image_it,image_files, stereo_image_files);
             } // image loop
 
             schema->write_stats(output_folder, file_prefix);
@@ -332,14 +374,6 @@ int main(int argc, char *argv[]) {
             else
                 *outStream << "\n--- Successful Completion ---\n" << std::endl;
 
-            for (int subset_idx = 0; subset_idx < schema->local_num_subsets(); subset_idx++) {
-                std::cout << "The DISPLACEMENT_X field value for subset " << subset_idx << " is "
-                          << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_X_FS) << std::endl;
-                std::cout << "The DISPLACEMENT_Y field value for subset " << subset_idx << " is "
-                          << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Y_FS) << std::endl;
-                std::cout << "The DISPLACEMENT_Z field value for subset " << subset_idx << " is "
-                          << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Z_FS) << std::endl;
-            }
             // output timing
         } // end scope for total time
         // print the timing data with or without verbose flag
@@ -356,13 +390,107 @@ int main(int argc, char *argv[]) {
             std::remove(timeFileName.str().c_str());
 
         DICe::finalize();
+        return schema;
 
     }
     catch (std::exception &e) {
         std::cout << e.what() << std::endl;
-        return 1;
+        return schema;
+    }
+}
+
+int main(int argc, char *argv[]) {
+    int return_val;
+    float Brightness;
+    float FrameWidth;
+    float FrameHeight;
+    int system_state = 0;
+    Teuchos::RCP<DICe::Schema> schema;
+
+    VideoCapture cap2(0); // open the default camera
+    VideoCapture cap1(2); // open the default camera
+
+    Brightness = cap1.get(CV_CAP_PROP_BRIGHTNESS);
+    FrameWidth = cap1.get(CV_CAP_PROP_FRAME_WIDTH);
+    FrameHeight = cap1.get(CV_CAP_PROP_FRAME_HEIGHT);
+
+    cout << "====================================" << endl << endl;
+    cout << "Default Brightness -------> " << Brightness << endl;
+    cout << "Default Width      -------> " << FrameWidth << endl;
+    cout << "Default Height     -------> " << FrameHeight << endl;
+    cout << "====================================" << endl;
+
+    if (!cap1.isOpened()) {  // check if we succeeded
+        std::cout << "First camera cannot be found\n";
+        return -1;
+    } else {
+        cout << "Camera 1 is open\n";
+    }
+    if (!cap2.isOpened()) {  // check if we succeeded
+        std::cout << "Second camera cannot be found\n";
+        return -1;
+    } else {
+        cout << "Camera 2 is open\n";
+    }
+
+    namedWindow("Left",WINDOW_AUTOSIZE);
+    namedWindow("Right",WINDOW_AUTOSIZE);
+    for (;;) {
+        switch (system_state) {
+            case 0:
+                cap2 >> frame1; // get a new frame from camera
+                cap1 >> frame2;
+
+                imshow("Left", frame1);
+                imshow("Right", frame2);
+                break;
+            case 1:
+                cap2 >> frame1; // get a new frame from camera
+                cap1 >> frame2;
+
+                imwrite("Img_0001_0.jpeg",frame1);
+                imwrite("Img_0001_1.jpeg",frame2);
+
+                list<SubSetData> *subSets = getSubSets();
+                if (subSets->size() > 0) {
+                    for (SubSetData &theSet : (*subSets)) {
+                        Rect r = Rect(theSet.X_Coord - (theSet.Subset_Size / 2),
+                                      theSet.Y_Coord - (theSet.Subset_Size / 2),
+                                      theSet.Subset_Size, theSet.Subset_Size);
+                        rectangle(frame1, r, Scalar(255, 0, 0), 1, 8, 0);
+                    }
+                }
+
+                imshow("Left", frame1);
+                imshow("Right", frame2);
+                
+                schema = main_stereo_3d_correlation(argc, argv);
+
+                for (int subset_idx = 0; subset_idx < schema->local_num_subsets(); subset_idx++) {
+                    std::cout << "The DISPLACEMENT_X field value for subset " << subset_idx << " is "
+                              << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_X_FS) << std::endl;
+                    std::cout << "The DISPLACEMENT_Y field value for subset " << subset_idx << " is "
+                              << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Y_FS) << std::endl;
+                    std::cout << "The DISPLACEMENT_Z field value for subset " << subset_idx << " is "
+                              << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Z_FS) << std::endl;
+                }
+                break;
+        }
+        char c = waitKey(5);
+
+        if (c == 'q') {
+            break;
+        }
+        if (c == 'i'){
+            imwrite("Img_0000_0.jpeg",frame1);
+            imwrite("Img_0000_1.jpeg",frame2);
+
+        }
+        if (c == 'r'){
+            system_state = 1;
+        }
     }
 
 
-    return 0;
+    return return_val;
 }
