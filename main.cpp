@@ -85,7 +85,7 @@ Teuchos::RCP<Teuchos::Time> total_time = Teuchos::TimeMonitor::getNewCounter("##
 Teuchos::RCP<Teuchos::Time> cross_time = Teuchos::TimeMonitor::getNewCounter("Cross-correlation");
 Teuchos::RCP<Teuchos::Time> corr_time = Teuchos::TimeMonitor::getNewCounter("Correlation");
 Teuchos::RCP<Teuchos::Time> write_time = Teuchos::TimeMonitor::getNewCounter("Write Output");
-Mat frame1, frame2;
+Mat frame1, frame2, data(500, 1200, CV_8UC3, Scalar(0,0, 0));;
 
 bool read_input_data_files(Teuchos::RCP<Teuchos::ParameterList> *l_input_params,
                            Teuchos::RCP<Teuchos::ParameterList> *l_correlation_params) {
@@ -222,11 +222,14 @@ bool run_correlation_and_triangulation(Teuchos::RCP<DICe::Schema> *l_schema, Teu
 Teuchos::RCP<DICe::Schema> main_stereo_3d_correlation(int argc, char *argv[]){
     Teuchos::RCP<DICe::Schema> schema;
     Teuchos::RCP<DICe::Schema> stereo_schema;
+    Teuchos::RCP<DICe::Triangulation> triangulation;
+    Teuchos::RCP<Teuchos::ParameterList> input_params;
+    Teuchos::RCP<Teuchos::ParameterList> correlation_params;
+    std::vector<std::string> image_files;
+    std::vector<std::string> stereo_image_files;
 
     try {
         DICe::initialize(argc, argv);
-        Teuchos::RCP<Teuchos::ParameterList> input_params;
-        Teuchos::RCP<Teuchos::ParameterList> correlation_params;
         std::string output_folder;
         bool is_error_est_run;
         int_t proc_size = 1;
@@ -248,8 +251,6 @@ Teuchos::RCP<DICe::Schema> main_stereo_3d_correlation(int argc, char *argv[]){
             is_error_est_run = read_input_data_files(&input_params, &correlation_params);
 
             /******* Decipher the image file names (note: zero entry is the reference image) */
-            std::vector<std::string> image_files;
-            std::vector<std::string> stereo_image_files;
             DICe::decipher_image_file_names(input_params, image_files, stereo_image_files);
             const bool is_stereo = stereo_image_files.size() > 0;
 
@@ -335,7 +336,7 @@ Teuchos::RCP<DICe::Schema> main_stereo_3d_correlation(int argc, char *argv[]){
                                        input_params->isParameter(DICe::camera_system_file),
                                        std::runtime_error,
                                        "Error, both calibration_parameters_file and camera_system_file cannot be specified");
-            Teuchos::RCP<DICe::Triangulation> triangulation;
+
             if (input_params->isParameter(DICe::calibration_parameters_file) ||
                 input_params->isParameter(DICe::camera_system_file)) {
                 if (proc_rank == 0)
@@ -463,16 +464,35 @@ int main(int argc, char *argv[]) {
 
                 imshow("Left", frame1);
                 imshow("Right", frame2);
-                
-                schema = main_stereo_3d_correlation(argc, argv);
+                imshow("Data",data);
 
+                schema = main_stereo_3d_correlation(argc, argv);
+                data.release();
+                data = Mat(500, 1200, CV_8UC3, Scalar(0,0, 0));
+                putText(data,"Subset 1", Point(0,30),FONT_HERSHEY_SIMPLEX,1,Scalar(128));
+                putText(data,"Subset 2", Point(400,30),FONT_HERSHEY_SIMPLEX,1,Scalar(128));
+                putText(data,"Subset 3", Point(800,30),FONT_HERSHEY_SIMPLEX,1,Scalar(128));
                 for (int subset_idx = 0; subset_idx < schema->local_num_subsets(); subset_idx++) {
-                    std::cout << "The DISPLACEMENT_X field value for subset " << subset_idx << " is "
-                              << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_X_FS) << std::endl;
-                    std::cout << "The DISPLACEMENT_Y field value for subset " << subset_idx << " is "
-                              << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Y_FS) << std::endl;
-                    std::cout << "The DISPLACEMENT_Z field value for subset " << subset_idx << " is "
-                              << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Z_FS) << std::endl;
+
+                    stringstream sx;
+                    stringstream sy;
+                    stringstream sz;
+                    sx << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_X_FS);
+                    sy << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Y_FS);
+                    sz << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Z_FS);
+                    putText(data,"X:", Point(subset_idx*400,80),FONT_HERSHEY_SIMPLEX,1,Scalar(128));
+                    putText(data,sx.str(), Point(subset_idx*400+100,80),FONT_HERSHEY_SIMPLEX,1,Scalar(128));
+                    putText(data,"Y:", Point(subset_idx*400,130),FONT_HERSHEY_SIMPLEX,1,Scalar(128));
+                    putText(data,sy.str(), Point(subset_idx*400+100,130),FONT_HERSHEY_SIMPLEX,1,Scalar(128));
+                    putText(data,"Z:", Point(subset_idx*400,180),FONT_HERSHEY_SIMPLEX,1,Scalar(128));
+                    putText(data,sz.str(), Point(subset_idx*400+100,180),FONT_HERSHEY_SIMPLEX,1,Scalar(128));
+
+//                    std::cout << "The DISPLACEMENT_X field value for subset " << subset_idx << " is "
+//                              << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_X_FS) << std::endl;
+//                    std::cout << "The DISPLACEMENT_Y field value for subset " << subset_idx << " is "
+//                              << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Y_FS) << std::endl;
+//                    std::cout << "The DISPLACEMENT_Z field value for subset " << subset_idx << " is "
+//                              << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Z_FS) << std::endl;
                 }
                 break;
         }
