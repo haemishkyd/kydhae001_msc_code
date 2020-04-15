@@ -460,6 +460,13 @@ int main(int argc, char *argv[]) {
                 imshow("Right", frame2);
                 break;
             case 1:
+                DICe::initialize(argc, argv);
+                information_extraction();
+                run_cross_correlation(&schema, &stereo_schema, &triangulation, &input_params, &correlation_params, image_files,
+                                      stereo_image_files);
+                system_state = 2;
+                break;
+            case 2:
                 cap2 >> frame1; // get a new frame from camera
                 cap1 >> frame2;
 
@@ -479,10 +486,7 @@ int main(int argc, char *argv[]) {
                 imshow("Left", frame1);
                 imshow("Right", frame2);
                 imshow("Data", data);
-                DICe::initialize(argc, argv);
-                information_extraction();
-                run_cross_correlation(&schema, &stereo_schema, &triangulation, &input_params, &correlation_params, image_files,
-                                      stereo_image_files);
+
                 main_stereo_3d_correlation();
                 data.release();
                 data = Mat(500, 1200, CV_8UC3, Scalar(0, 0, 0));
@@ -521,7 +525,6 @@ int main(int argc, char *argv[]) {
         if (c == 'i') {
             imwrite("Img_0000_0.jpeg", frame1);
             imwrite("Img_0000_1.jpeg", frame2);
-
         }
         if (c == 'r') {
             system_state = 1;
