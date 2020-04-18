@@ -507,13 +507,6 @@ int main(int argc, char *argv[]) {
                     putText(data, sy.str(), Point(subset_idx * 400 + 100, 130), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
                     putText(data, "Z:", Point(subset_idx * 400, 180), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
                     putText(data, sz.str(), Point(subset_idx * 400 + 100, 180), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-
-//                    std::cout << "The DISPLACEMENT_X field value for subset " << subset_idx << " is "
-//                              << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_X_FS) << std::endl;
-//                    std::cout << "The DISPLACEMENT_Y field value for subset " << subset_idx << " is "
-//                              << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Y_FS) << std::endl;
-//                    std::cout << "The DISPLACEMENT_Z field value for subset " << subset_idx << " is "
-//                              << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Z_FS) << std::endl;
                 }
                 break;
         }
