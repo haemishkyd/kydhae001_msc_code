@@ -70,6 +70,7 @@ void run_cross_correlation();
 bool run_correlation_and_triangulation(int image_it);
 void main_stereo_3d_correlation();
 void information_extraction();
+void create_image_in_memory(double *refRCP, double *defRCP);
 
 typedef struct{
     int num_frames;
@@ -78,6 +79,8 @@ typedef struct{
     bool is_stereo;
     int proc_size;
     int proc_rank;
+    int FrameWidth;
+    int FrameHeight;
 }MainDataStructType;
 
 Teuchos::RCP<DICe::Schema> schema;
@@ -142,6 +145,19 @@ void run_cross_correlation() {
     schema->initialize_cross_correlation(triangulation,
                                               input_params); // images don't need to be loaded by here they get loaded in this routine based on the input params
     schema->update_extents(true);
+
+    /* Create the image in memory */
+
+    double refRCP[(int) (MainDataStruct.FrameHeight * MainDataStruct.FrameWidth)];
+    double defRCP[(int) (MainDataStruct.FrameHeight * MainDataStruct.FrameWidth)];
+
+    create_image_in_memory(refRCP,defRCP);
+    Teuchos::ArrayRCP<double> fRefRCP(refRCP, 0, MainDataStruct.FrameHeight * MainDataStruct.FrameWidth, false);
+    Teuchos::ArrayRCP<double> fDefRCP(defRCP, 0, MainDataStruct.FrameHeight * MainDataStruct.FrameWidth, false);
+
+    schema->set_ref_image(MainDataStruct.FrameWidth, MainDataStruct.FrameHeight, fRefRCP);
+    schema->set_def_image(MainDataStruct.FrameWidth, MainDataStruct.FrameHeight, fDefRCP, 0);
+
     schema->set_ref_image(image_files[0]);
     schema->set_def_image(stereo_image_files[0]);
     if (schema->use_nonlinear_projection()) {
@@ -151,7 +167,8 @@ void run_cross_correlation() {
     schema->save_cross_correlation_fields();
     stereo_schema = Teuchos::rcp(new DICe::Schema(input_params, correlation_params, schema));
     stereo_schema->update_extents();
-    stereo_schema->set_ref_image(stereo_image_files[0]);
+    stereo_schema->set_ref_image(MainDataStruct.FrameWidth, MainDataStruct.FrameHeight, fDefRCP);
+//    stereo_schema->set_ref_image(stereo_image_files[0]);
     assert(stereo_schema != Teuchos::null);
     //if(stereo_schema->use_nonlinear_projection())
     //  stereo_schema->project_right_image_into_left_frame(triangulation,true);
@@ -159,6 +176,15 @@ void run_cross_correlation() {
 
     // go ahead and set up the model coordinates field
     schema->execute_triangulation(triangulation, schema);
+}
+
+void create_image_in_memory(double *refRCP, double *defRCP){
+    for (int img_idx = 0; img_idx < MainDataStruct.FrameHeight * MainDataStruct.FrameWidth; img_idx++) {
+        refRCP[img_idx] = frame1.data[img_idx * 3] * 0.11 + frame1.data[img_idx * 3 + 1] * 0.59 +
+                frame1.data[img_idx * 3 + 2] * 0.30;
+        defRCP[img_idx] = frame2.data[img_idx * 3] * 0.11 + frame2.data[img_idx * 3 + 1] * 0.59 +
+                frame2.data[img_idx * 3 + 2] * 0.30;
+    }
 }
 
 bool run_correlation_and_triangulation(int image_it) {
@@ -393,21 +419,19 @@ void main_stereo_3d_correlation() {
 int main(int argc, char *argv[]) {
     int return_val;
     float Brightness;
-    float FrameWidth;
-    float FrameHeight;
     int system_state = 0;
 
     VideoCapture cap2(0); // open the default camera
     VideoCapture cap1(2); // open the default camera
 
     Brightness = cap1.get(CV_CAP_PROP_BRIGHTNESS);
-    FrameWidth = cap1.get(CV_CAP_PROP_FRAME_WIDTH);
-    FrameHeight = cap1.get(CV_CAP_PROP_FRAME_HEIGHT);
+    MainDataStruct.FrameWidth = cap1.get(CV_CAP_PROP_FRAME_WIDTH);
+    MainDataStruct.FrameHeight = cap1.get(CV_CAP_PROP_FRAME_HEIGHT);
 
     cout << "====================================" << endl << endl;
     cout << "Default Brightness -------> " << Brightness << endl;
-    cout << "Default Width      -------> " << FrameWidth << endl;
-    cout << "Default Height     -------> " << FrameHeight << endl;
+    cout << "Default Width      -------> " << MainDataStruct.FrameWidth << endl;
+    cout << "Default Height     -------> " << MainDataStruct.FrameHeight << endl;
     cout << "====================================" << endl;
 
     if (!cap1.isOpened()) {  // check if we succeeded
@@ -435,6 +459,8 @@ int main(int argc, char *argv[]) {
                 imshow("Right", frame2);
                 break;
             case 1:
+                cap2 >> frame1; // get a new frame from camera
+                cap1 >> frame2;
                 DICe::initialize(argc, argv);
                 information_extraction();
                 run_cross_correlation();
@@ -492,8 +518,6 @@ int main(int argc, char *argv[]) {
         if (c == 'i') {
             imwrite("Img_0000_0.jpeg", frame1);
             imwrite("Img_0000_1.jpeg", frame2);
-        }
-        if (c == 'r') {
             system_state = 1;
         }
     }
