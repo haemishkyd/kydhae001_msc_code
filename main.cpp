@@ -66,19 +66,25 @@ using namespace cv;
 using namespace std;
 
 bool read_input_data_files();
+
 void run_cross_correlation();
+
 bool run_correlation_and_triangulation(int image_it);
+
 void main_stereo_3d_correlation();
+
 void information_extraction();
 
-typedef struct{
+typedef struct {
     int num_frames;
     std::string file_prefix;
     std::string stereo_file_prefix;
     bool is_stereo;
     int proc_size;
     int proc_rank;
-}MainDataStructType;
+    int FrameWidth;
+    int FrameHeight;
+} MainDataStructType;
 
 Teuchos::RCP<DICe::Schema> schema;
 Teuchos::RCP<DICe::Schema> stereo_schema;
@@ -92,10 +98,13 @@ MainDataStructType MainDataStruct;
 /**
  * Start a whole bunch of metrics to see how long stuff takes!!
  */
-Teuchos::RCP<Teuchos::Time> total_time = Teuchos::TimeMonitor::getNewCounter("## Total Time ##");
-Teuchos::RCP<Teuchos::Time> cross_time = Teuchos::TimeMonitor::getNewCounter("Cross-correlation");
+
+Teuchos::RCP<Teuchos::Time> cross_time = Teuchos::TimeMonitor::getNewCounter("Cross-Correlation and Triangulation");
+Teuchos::RCP<Teuchos::Time> state_2_timer = Teuchos::TimeMonitor::getNewCounter("Entire Process Cycle Time");
+Teuchos::RCP<Teuchos::Time> total_corr_loop = Teuchos::TimeMonitor::getNewCounter("Total Correlation Time");
 Teuchos::RCP<Teuchos::Time> corr_time = Teuchos::TimeMonitor::getNewCounter("Correlation");
 Teuchos::RCP<Teuchos::Time> write_time = Teuchos::TimeMonitor::getNewCounter("Write Output");
+
 Mat frame1, frame2, data(500, 1200, CV_8UC3, Scalar(0, 0, 0));;
 
 bool read_input_data_files() {
@@ -140,8 +149,9 @@ void run_cross_correlation() {
                                "Error, global stereo not enabled yet");
     *outStream << "Processing cross correlation between left and right images" << std::endl;
     schema->initialize_cross_correlation(triangulation,
-                                              input_params); // images don't need to be loaded by here they get loaded in this routine based on the input params
+                                         input_params); // images don't need to be loaded by here they get loaded in this routine based on the input params
     schema->update_extents(true);
+
     schema->set_ref_image(image_files[0]);
     schema->set_def_image(stereo_image_files[0]);
     if (schema->use_nonlinear_projection()) {
@@ -165,6 +175,8 @@ bool run_correlation_and_triangulation(int image_it) {
     bool failed_step = false;
     bool is_stereo = true; //This is definitely stereo
 
+    Teuchos::TimeMonitor corr_time_monitor(*corr_time);
+
     std::string file_prefix = input_params->get<std::string>(DICe::output_prefix, "DICe_solution");
     std::string stereo_file_prefix = input_params->get<std::string>(DICe::output_prefix, "DICe_solution");
     stereo_file_prefix += "_stereo";
@@ -172,39 +184,31 @@ bool run_correlation_and_triangulation(int image_it) {
 
     *outStream << "Processing frame: " << image_it << ", " << image_files[image_it]
                << std::endl;
-    if (schema->use_incremental_formulation() && image_it > 1) {
-        schema->set_ref_image(schema->def_img());
-    }
+
     schema->update_extents();
     schema->set_def_image(image_files[image_it]);
     if (is_stereo) {
-        if (stereo_schema->use_incremental_formulation() && image_it > 1) {
-            stereo_schema->set_ref_image(stereo_schema->def_img());
-        }
         stereo_schema->update_extents();
         stereo_schema->set_def_image(stereo_image_files[image_it]);
-        //if(stereo_schema->use_nonlinear_projection())
-        //  stereo_schema->project_right_image_into_left_frame(triangulation,false);
     }
-    { // start the timer
-        Teuchos::TimeMonitor corr_time_monitor(*corr_time);
-        int_t corr_error = schema->execute_correlation();
+
+    int_t corr_error = schema->execute_correlation();
+    if (corr_error)
+        failed_step = true;
+    if (is_stereo) {
+        corr_error = stereo_schema->execute_correlation();
         if (corr_error)
             failed_step = true;
-        if (is_stereo) {
-            corr_error = stereo_schema->execute_correlation();
-            if (corr_error)
-                failed_step = true;
-        }
-        schema->execute_triangulation(triangulation, stereo_schema);
-        schema->execute_post_processors();
     }
+    schema->execute_triangulation(triangulation, stereo_schema);
+    schema->execute_post_processors();
+
     // write the output
     const bool no_text_output = input_params->get<bool>(DICe::no_text_output_files, false);
     {
         Teuchos::TimeMonitor write_time_monitor(*write_time);
         schema->write_output(output_folder, file_prefix, separate_output_file_for_each_subset,
-                                  separate_header_file, no_text_output);
+                             separate_header_file, no_text_output);
         schema->post_execution_tasks();
         // print the timing data with or without verbose flag
         if (input_params->get<bool>(DICe::print_stats, false)) {
@@ -216,8 +220,8 @@ bool run_correlation_and_triangulation(int image_it) {
         if (is_stereo) {
             if (input_params->get<bool>(DICe::output_stereo_files, false)) {
                 stereo_schema->write_output(output_folder, stereo_file_prefix,
-                                                 separate_output_file_for_each_subset, separate_header_file,
-                                                 no_text_output);
+                                            separate_output_file_for_each_subset, separate_header_file,
+                                            no_text_output);
             }
             stereo_schema->post_execution_tasks();
         }
@@ -226,7 +230,7 @@ bool run_correlation_and_triangulation(int image_it) {
 }
 
 
-void information_extraction(){
+void information_extraction() {
     std::string output_folder;
     bool is_error_est_run;
     int_t proc_size = 1;
@@ -358,6 +362,8 @@ void main_stereo_3d_correlation() {
 
     // iterate through the images and perform the correlation:
     bool failed_step;
+    Teuchos::TimeMonitor stereo_3d_corr(*total_corr_loop);
+
 
     for (int_t image_it = 1; image_it <= MainDataStruct.num_frames; ++image_it) {
         failed_step = run_correlation_and_triangulation(image_it);
@@ -393,21 +399,21 @@ void main_stereo_3d_correlation() {
 int main(int argc, char *argv[]) {
     int return_val;
     float Brightness;
-    float FrameWidth;
-    float FrameHeight;
     int system_state = 0;
+    stringstream cross_and_trian_time_str;
+    stringstream state_2_total_time_str;
 
     VideoCapture cap2(0); // open the default camera
     VideoCapture cap1(2); // open the default camera
 
     Brightness = cap1.get(CV_CAP_PROP_BRIGHTNESS);
-    FrameWidth = cap1.get(CV_CAP_PROP_FRAME_WIDTH);
-    FrameHeight = cap1.get(CV_CAP_PROP_FRAME_HEIGHT);
+    MainDataStruct.FrameWidth = cap1.get(CV_CAP_PROP_FRAME_WIDTH);
+    MainDataStruct.FrameHeight = cap1.get(CV_CAP_PROP_FRAME_HEIGHT);
 
     cout << "====================================" << endl << endl;
     cout << "Default Brightness -------> " << Brightness << endl;
-    cout << "Default Width      -------> " << FrameWidth << endl;
-    cout << "Default Height     -------> " << FrameHeight << endl;
+    cout << "Default Width      -------> " << MainDataStruct.FrameWidth << endl;
+    cout << "Default Height     -------> " << MainDataStruct.FrameHeight << endl;
     cout << "====================================" << endl;
 
     if (!cap1.isOpened()) {  // check if we succeeded
@@ -435,12 +441,19 @@ int main(int argc, char *argv[]) {
                 imshow("Right", frame2);
                 break;
             case 1:
+                cap2 >> frame1; // get a new frame from camera
+                cap1 >> frame2;
                 DICe::initialize(argc, argv);
                 information_extraction();
                 run_cross_correlation();
+
+                cross_and_trian_time_str.str("");
+                cross_and_trian_time_str << cross_time.get()->totalElapsedTime();
+
                 system_state = 2;
                 break;
-            case 2:
+            case 2: {
+                Teuchos::TimeMonitor state_2_monitor(*state_2_timer);
                 cap2 >> frame1; // get a new frame from camera
                 cap1 >> frame2;
 
@@ -482,8 +495,35 @@ int main(int argc, char *argv[]) {
                     putText(data, "Z:", Point(subset_idx * 400, 180), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
                     putText(data, sz.str(), Point(subset_idx * 400 + 100, 180), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
                 }
+                stringstream time_str;
+
+                putText(data, "cross_time:", Point(0, 230), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
+                putText(data, cross_and_trian_time_str.str(), Point(300, 230), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
+
+                putText(data, "state_2_timer:", Point(0, 280), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
+                putText(data, state_2_total_time_str.str(), Point(300, 280), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
+
+                putText(data, "total_corr_loop:", Point(0, 330), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
+                time_str.str("");
+                time_str << total_corr_loop.get()->totalElapsedTime();
+                putText(data, time_str.str(), Point(300, 330), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
+
+                putText(data, "corr_time:", Point(0, 380), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
+                time_str.str("");
+                time_str << corr_time.get()->totalElapsedTime();
+                putText(data, time_str.str(), Point(300, 380), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
+
+                putText(data, "write_time:", Point(0, 430), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
+                time_str.str("");
+                time_str << write_time.get()->totalElapsedTime();
+                putText(data, time_str.str(), Point(300, 430), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
+            }
                 break;
         }
+        state_2_total_time_str.str("");
+        state_2_total_time_str << state_2_timer.get()->totalElapsedTime()<<"("<<int(1.0/state_2_timer.get()->totalElapsedTime())<<" Hz)";
+        Teuchos::TimeMonitor::zeroOutTimers();
+
         char c = waitKey(5);
 
         if (c == 'q') {
@@ -492,12 +532,9 @@ int main(int argc, char *argv[]) {
         if (c == 'i') {
             imwrite("Img_0000_0.jpeg", frame1);
             imwrite("Img_0000_1.jpeg", frame2);
-        }
-        if (c == 'r') {
             system_state = 1;
         }
     }
-
 
     return return_val;
 }
