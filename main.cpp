@@ -75,6 +75,12 @@ void main_stereo_3d_correlation();
 
 void information_extraction();
 
+void write_timing_metrics();
+
+void dataMouseCallBack(int event, int x, int y, int flags, void* userdata);
+
+void outputImageInformation();
+
 typedef struct {
     int num_frames;
     std::string file_prefix;
@@ -104,6 +110,11 @@ Teuchos::RCP<Teuchos::Time> state_2_timer = Teuchos::TimeMonitor::getNewCounter(
 Teuchos::RCP<Teuchos::Time> total_corr_loop = Teuchos::TimeMonitor::getNewCounter("Total Correlation Time");
 Teuchos::RCP<Teuchos::Time> corr_time = Teuchos::TimeMonitor::getNewCounter("Correlation");
 Teuchos::RCP<Teuchos::Time> write_time = Teuchos::TimeMonitor::getNewCounter("Write Output");
+stringstream cross_and_trian_time_str;
+stringstream state_2_total_time_str;
+
+Rect z_button, x_button, y_button;
+bool x_button_clicked, y_button_clicked, z_button_clicked;
 
 Mat frame1, frame2, data(500, 1200, CV_8UC3, Scalar(0, 0, 0));;
 
@@ -378,30 +389,138 @@ void main_stereo_3d_correlation() {
     else
         *outStream << "\n--- Successful Completion ---\n" << std::endl;
 
-    // output timing
+    DICe::finalize();
+}
 
-    // print the timing data with or without verbose flag
-    if (input_params->get<bool>(DICe::print_timing, false)) {
-        Teuchos::TimeMonitor::summarize(*outStream, false, true, false/*zero timers*/);
+void dataMouseCallBack(int event, int x, int y, int flags, void* userdata){
+    if (event == EVENT_LBUTTONDOWN)
+    {
+        if (x_button.contains(Point(x, y)))
+        {
+            x_button_clicked = true;
+            y_button_clicked = false;
+            z_button_clicked = false;
+        }
+        if (y_button.contains(Point(x, y)))
+        {
+            x_button_clicked = false;
+            y_button_clicked = true;
+            z_button_clicked = false;
+        }
+        if (z_button.contains(Point(x, y)))
+        {
+            x_button_clicked = false;
+            y_button_clicked = false;
+            z_button_clicked = true;
+        }
     }
+}
+
+void write_timing_metrics() {
+    // output timing
     //  write the time output to file:
     std::stringstream timeFileName;
-    timeFileName << output_folder << "timing." << MainDataStruct.proc_size << "." << MainDataStruct.proc_rank << ".txt";
-    std::ofstream ofs(timeFileName.str(), std::ofstream::out);
-    Teuchos::TimeMonitor::summarize(ofs, false, true, false/*zero timers*/);
-    ofs.close();
-    if (MainDataStruct.proc_rank != 0) // only keep the process zero copy of the timing results
-        std::remove(timeFileName.str().c_str());
+    timeFileName << "timing.txt";
+    std::ofstream ofs(timeFileName.str(), std::ofstream::out | std::ofstream::app);
 
-    DICe::finalize();
+    ofs << cross_and_trian_time_str.str() << "," << state_2_timer.get()->totalElapsedTime() << ","
+        << total_corr_loop.get()->totalElapsedTime() << "," << corr_time.get()->totalElapsedTime() << ","
+        << write_time.get()->totalElapsedTime() << "," << int(1.0 / state_2_timer.get()->totalElapsedTime())<<endl;
+
+    ofs.close();
+}
+
+void outputImageInformation(){
+    list<SubSetData> *subSets = getSubSets();
+    if (subSets->size() > 0) {
+        for (SubSetData &theSet : (*subSets)) {
+            Rect r = Rect(theSet.X_Coord - (theSet.Subset_Size / 2),
+                          theSet.Y_Coord - (theSet.Subset_Size / 2),
+                          theSet.Subset_Size, theSet.Subset_Size);
+            std::vector<Mat> channels(3);
+            cv:split(frame1,channels);
+            Mat extractedRoi;
+            extractedRoi = channels.at(2)(r);
+            extractedRoi += char((schema->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS))*-5);
+            cv::merge(channels, frame1);
+            rectangle(frame1, r, Scalar(255, 0, 0), 1, 8, 0);
+        }
+    }
+    Mat OutputFrame;
+    hconcat(frame1,frame2,OutputFrame);
+    data.release();
+    data = Mat(500, 1280, CV_8UC3, Scalar(0, 0, 0));
+    Scalar textColour = Scalar(255,255,0);
+    putText(data, "Subset 1", Point(0, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(data, "Subset 2", Point(400, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(data, "Subset 3", Point(800, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
+
+    for (int subset_idx = 0; subset_idx < schema->local_num_subsets(); subset_idx++) {
+
+        stringstream sx;
+        stringstream sy;
+        stringstream sz;
+        sx << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_X_FS);
+        sy << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Y_FS);
+        sz << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Z_FS);
+        putText(data, "X:", Point(subset_idx * 400, 80), FONT_HERSHEY_SIMPLEX, 1, textColour);
+        putText(data, sx.str(), Point(subset_idx * 400 + 100, 80), FONT_HERSHEY_SIMPLEX, 1, textColour);
+        putText(data, "Y:", Point(subset_idx * 400, 130), FONT_HERSHEY_SIMPLEX, 1, textColour);
+        putText(data, sy.str(), Point(subset_idx * 400 + 100, 130), FONT_HERSHEY_SIMPLEX, 1, textColour);
+        putText(data, "Z:", Point(subset_idx * 400, 180), FONT_HERSHEY_SIMPLEX, 1, textColour);
+        putText(data, sz.str(), Point(subset_idx * 400 + 100, 180), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    }
+    stringstream time_str;
+
+    putText(data, "cross_time:", Point(0, 230), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(data, cross_and_trian_time_str.str(), Point(300, 230), FONT_HERSHEY_SIMPLEX, 1, textColour);
+
+    putText(data, "state_2_timer:", Point(0, 280), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(data, state_2_total_time_str.str(), Point(300, 280), FONT_HERSHEY_SIMPLEX, 1, textColour);
+
+    putText(data, "total_corr_loop:", Point(0, 330), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    time_str.str("");
+    time_str << total_corr_loop.get()->totalElapsedTime();
+    putText(data, time_str.str(), Point(300, 330), FONT_HERSHEY_SIMPLEX, 1, textColour);
+
+    putText(data, "corr_time:", Point(0, 380), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    time_str.str("");
+    time_str << corr_time.get()->totalElapsedTime();
+    putText(data, time_str.str(), Point(300, 380), FONT_HERSHEY_SIMPLEX, 1, textColour);
+
+    putText(data, "write_time:", Point(0, 430), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    time_str.str("");
+    time_str << write_time.get()->totalElapsedTime();
+    putText(data, time_str.str(), Point(300, 430), FONT_HERSHEY_SIMPLEX, 1, textColour);
+
+    vconcat(OutputFrame,data,OutputFrame);
+
+    x_button = Rect(0,960,400, 20);
+    y_button = Rect(400,960,400, 20);
+    z_button = Rect(800,960,400, 20);
+    Scalar rectangle_color;
+    rectangle_color = x_button_clicked == true?Scalar(100,127,255):Scalar(0,255,0);
+    rectangle(OutputFrame,x_button,rectangle_color,1,8,0);
+    rectangle_color = y_button_clicked == true?Scalar(100,127,255):Scalar(0,255,0);
+    rectangle(OutputFrame,y_button,rectangle_color,1,8,0);
+    rectangle_color = z_button_clicked == true?Scalar(100,127,255):Scalar(0,255,0);
+    rectangle(OutputFrame,z_button,rectangle_color,1,8,0);
+
+    putText(OutputFrame, "Show X", Point(150, 975), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,255,0));
+    putText(OutputFrame, "Show Y", Point(550, 975), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,255,0));
+    putText(OutputFrame, "Show Z", Point(950, 975), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,255,0));
+    imshow("Real Time DIC - Haemish Kyd",OutputFrame);
+    setMouseCallback("Real Time DIC - Haemish Kyd",dataMouseCallBack);
 }
 
 int main(int argc, char *argv[]) {
     int return_val;
     float Brightness;
     int system_state = 0;
-    stringstream cross_and_trian_time_str;
-    stringstream state_2_total_time_str;
+
+    x_button_clicked = false;
+    y_button_clicked = false;
+    z_button_clicked = false;
 
     VideoCapture cap2(0); // open the default camera
     VideoCapture cap1(2); // open the default camera
@@ -429,16 +548,26 @@ int main(int argc, char *argv[]) {
         cout << "Camera 2 is open\n";
     }
 
-    namedWindow("Left", WINDOW_AUTOSIZE);
-    namedWindow("Right", WINDOW_AUTOSIZE);
+    //This is here simply to clear the file.
+    std::stringstream timeFileName;
+    timeFileName << "timing.txt";
+    std::ofstream ofs(timeFileName.str(), std::ofstream::out);
+    ofs << "Cross Correlation and Triangulations" << "," << "Entire Process" << ","
+        << "Correlation Loop" << "," << "Correlation Process" << ","
+        << "Write Process" << "," << "Hz" <<endl;
+    ofs.close();
+
+    namedWindow("Real Time DIC - Haemish Kyd", WINDOW_AUTOSIZE);
     for (;;) {
         switch (system_state) {
-            case 0:
+            case 0: {
+                Mat OutputFrame;
                 cap2 >> frame1; // get a new frame from camera
                 cap1 >> frame2;
 
-                imshow("Left", frame1);
-                imshow("Right", frame2);
+                hconcat(frame1, frame2, OutputFrame);
+                imshow("Real Time DIC - Haemish Kyd", OutputFrame);
+            }
                 break;
             case 1:
                 cap2 >> frame1; // get a new frame from camera
@@ -460,68 +589,19 @@ int main(int argc, char *argv[]) {
                 imwrite("Img_0001_0.jpeg", frame1);
                 imwrite("Img_0001_1.jpeg", frame2);
 
-                list<SubSetData> *subSets = getSubSets();
-                if (subSets->size() > 0) {
-                    for (SubSetData &theSet : (*subSets)) {
-                        Rect r = Rect(theSet.X_Coord - (theSet.Subset_Size / 2),
-                                      theSet.Y_Coord - (theSet.Subset_Size / 2),
-                                      theSet.Subset_Size, theSet.Subset_Size);
-                        rectangle(frame1, r, Scalar(255, 0, 0), 1, 8, 0);
-                    }
-                }
-
-                imshow("Left", frame1);
-                imshow("Right", frame2);
-                imshow("Data", data);
-
                 main_stereo_3d_correlation();
-                data.release();
-                data = Mat(500, 1200, CV_8UC3, Scalar(0, 0, 0));
-                putText(data, "Subset 1", Point(0, 30), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                putText(data, "Subset 2", Point(400, 30), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                putText(data, "Subset 3", Point(800, 30), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                for (int subset_idx = 0; subset_idx < schema->local_num_subsets(); subset_idx++) {
 
-                    stringstream sx;
-                    stringstream sy;
-                    stringstream sz;
-                    sx << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_X_FS);
-                    sy << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Y_FS);
-                    sz << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Z_FS);
-                    putText(data, "X:", Point(subset_idx * 400, 80), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                    putText(data, sx.str(), Point(subset_idx * 400 + 100, 80), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                    putText(data, "Y:", Point(subset_idx * 400, 130), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                    putText(data, sy.str(), Point(subset_idx * 400 + 100, 130), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                    putText(data, "Z:", Point(subset_idx * 400, 180), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                    putText(data, sz.str(), Point(subset_idx * 400 + 100, 180), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                }
-                stringstream time_str;
-
-                putText(data, "cross_time:", Point(0, 230), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                putText(data, cross_and_trian_time_str.str(), Point(300, 230), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-
-                putText(data, "state_2_timer:", Point(0, 280), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                putText(data, state_2_total_time_str.str(), Point(300, 280), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-
-                putText(data, "total_corr_loop:", Point(0, 330), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                time_str.str("");
-                time_str << total_corr_loop.get()->totalElapsedTime();
-                putText(data, time_str.str(), Point(300, 330), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-
-                putText(data, "corr_time:", Point(0, 380), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                time_str.str("");
-                time_str << corr_time.get()->totalElapsedTime();
-                putText(data, time_str.str(), Point(300, 380), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-
-                putText(data, "write_time:", Point(0, 430), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
-                time_str.str("");
-                time_str << write_time.get()->totalElapsedTime();
-                putText(data, time_str.str(), Point(300, 430), FONT_HERSHEY_SIMPLEX, 1, Scalar(128));
+                outputImageInformation();
             }
                 break;
         }
         state_2_total_time_str.str("");
         state_2_total_time_str << state_2_timer.get()->totalElapsedTime()<<"("<<int(1.0/state_2_timer.get()->totalElapsedTime())<<" Hz)";
+
+        if (system_state > 0) {
+            write_timing_metrics();
+        }
+
         Teuchos::TimeMonitor::zeroOutTimers();
 
         char c = waitKey(5);
