@@ -39,6 +39,8 @@
 // ************************************************************************
 // @HEADER
 
+#include <pthread.h>
+#include <chrono>
 #include <DICe.h>
 #include <DICe_Parser.h>
 #include <DICe_Image.h>
@@ -51,10 +53,12 @@
 
 #include <Teuchos_TimeMonitor.hpp>
 #include <Teuchos_XMLParameterListHelpers.hpp>
+#include <zconf.h>
 
 #include "opencv2/opencv.hpp"
 
 #include "SubSetData.h"
+#include "Semaphore.h"
 
 #if DICE_MPI
 #  include <mpi.h>
@@ -117,6 +121,12 @@ Rect z_button, x_button, y_button;
 bool x_button_clicked, y_button_clicked, z_button_clicked;
 
 Mat frame1, frame2, data(500, 1200, CV_8UC3, Scalar(0, 0, 0));;
+
+Semaphore WriteComplete(0);
+Semaphore ReadComplete(0);
+
+VideoCapture cap2(0); // open the default camera
+VideoCapture cap1(2); // open the default camera
 
 bool read_input_data_files() {
     /**
@@ -211,6 +221,7 @@ bool run_correlation_and_triangulation(int image_it) {
         if (corr_error)
             failed_step = true;
     }
+    ReadComplete.notify(0);
     schema->execute_triangulation(triangulation, stereo_schema);
     schema->execute_post_processors();
 
@@ -513,17 +524,29 @@ void outputImageInformation(){
     setMouseCallback("Real Time DIC - Haemish Kyd",dataMouseCallBack);
 }
 
+void *WriteImageFiles(void *threadid) {
+    long tid;
+    tid = (long)threadid;
+    while (1) {
+        ReadComplete.wait(tid);
+        cap2 >> frame1; // get a new frame from camera
+        cap1 >> frame2;
+        imwrite("Img_0001_0.jpeg", frame1);
+        imwrite("Img_0001_1.jpeg", frame2);
+        WriteComplete.notify(tid);
+    }
+    pthread_exit(NULL);
+}
+
 int main(int argc, char *argv[]) {
     int return_val;
     float Brightness;
     int system_state = 0;
+    pthread_t threads[1];
 
     x_button_clicked = false;
     y_button_clicked = false;
     z_button_clicked = false;
-
-    VideoCapture cap2(0); // open the default camera
-    VideoCapture cap1(2); // open the default camera
 
     Brightness = cap1.get(CV_CAP_PROP_BRIGHTNESS);
     MainDataStruct.FrameWidth = cap1.get(CV_CAP_PROP_FRAME_WIDTH);
@@ -579,16 +602,14 @@ int main(int argc, char *argv[]) {
                 cross_and_trian_time_str.str("");
                 cross_and_trian_time_str << cross_time.get()->totalElapsedTime();
 
+                (void)pthread_create(&threads[0], NULL, WriteImageFiles, (void *)0);
+                ReadComplete.notify(0);
                 system_state = 2;
                 break;
             case 2: {
                 Teuchos::TimeMonitor state_2_monitor(*state_2_timer);
-                cap2 >> frame1; // get a new frame from camera
-                cap1 >> frame2;
 
-                imwrite("Img_0001_0.jpeg", frame1);
-                imwrite("Img_0001_1.jpeg", frame2);
-
+                WriteComplete.wait(0);
                 main_stereo_3d_correlation();
 
                 outputImageInformation();
