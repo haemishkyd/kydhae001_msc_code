@@ -40,7 +40,6 @@
 // @HEADER
 
 #include <pthread.h>
-#include <chrono>
 #include <DICe.h>
 #include <DICe_Parser.h>
 #include <DICe_Image.h>
@@ -53,7 +52,6 @@
 
 #include <Teuchos_TimeMonitor.hpp>
 #include <Teuchos_XMLParameterListHelpers.hpp>
-#include <zconf.h>
 
 #include "opencv2/opencv.hpp"
 
@@ -94,6 +92,7 @@ typedef struct {
     int proc_rank;
     int FrameWidth;
     int FrameHeight;
+    bool WriteThreadRunning;
 } MainDataStructType;
 
 Teuchos::RCP<DICe::Schema> schema;
@@ -442,21 +441,9 @@ void write_timing_metrics() {
 }
 
 void outputImageInformation(){
-    list<SubSetData> *subSets = getSubSets();
-    if (subSets->size() > 0) {
-        for (SubSetData &theSet : (*subSets)) {
-            Rect r = Rect(theSet.X_Coord - (theSet.Subset_Size / 2),
-                          theSet.Y_Coord - (theSet.Subset_Size / 2),
-                          theSet.Subset_Size, theSet.Subset_Size);
-            std::vector<Mat> channels(3);
-            cv:split(frame1,channels);
-            Mat extractedRoi;
-            extractedRoi = channels.at(2)(r);
-            extractedRoi += char((schema->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS))*-5);
-            cv::merge(channels, frame1);
-            rectangle(frame1, r, Scalar(255, 0, 0), 1, 8, 0);
-        }
-    }
+
+    drawSubsets(&frame1,&schema);
+
     Mat OutputFrame;
     hconcat(frame1,frame2,OutputFrame);
     data.release();
@@ -527,7 +514,7 @@ void outputImageInformation(){
 void *WriteImageFiles(void *threadid) {
     long tid;
     tid = (long)threadid;
-    while (1) {
+    while (MainDataStruct.WriteThreadRunning) {
         ReadComplete.wait(tid);
         cap2 >> frame1; // get a new frame from camera
         cap1 >> frame2;
@@ -547,6 +534,7 @@ int main(int argc, char *argv[]) {
     x_button_clicked = false;
     y_button_clicked = false;
     z_button_clicked = false;
+    MainDataStruct.WriteThreadRunning = true;
 
     Brightness = cap1.get(CV_CAP_PROP_BRIGHTNESS);
     MainDataStruct.FrameWidth = cap1.get(CV_CAP_PROP_FRAME_WIDTH);
@@ -628,6 +616,8 @@ int main(int argc, char *argv[]) {
         char c = waitKey(5);
 
         if (c == 'q') {
+            MainDataStruct.WriteThreadRunning = false;
+            pthread_cancel(threads[0]);
             break;
         }
         if (c == 'i') {

@@ -2,10 +2,8 @@
 // Created by haemish on 2020/04/11.
 //
 
-#ifndef CUSTOM_APP_SUBSETDATA_H
-#define CUSTOM_APP_SUBSETDATA_H
-
 using namespace std;
+using namespace cv;
 
 class SubSetData {
 public:
@@ -23,8 +21,10 @@ public:
         Y_Coord = y;
         Subset_Size = s;
     }
+
+
 };
 
 list<SubSetData> *getSubSets();
+void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema);
 
-#endif //CUSTOM_APP_SUBSETDATA_H
