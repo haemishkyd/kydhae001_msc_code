@@ -52,6 +52,7 @@
 
 #include <Teuchos_TimeMonitor.hpp>
 #include <Teuchos_XMLParameterListHelpers.hpp>
+#include <SerialPort.h>
 
 #include "opencv2/opencv.hpp"
 
@@ -529,7 +530,22 @@ int main(int argc, char *argv[]) {
     int return_val;
     float Brightness;
     int system_state = 0;
+    unsigned char serial_data[10];
     pthread_t threads[1];
+
+    string port("/dev/ttyUSB0");
+    SerialPort serial_port(port);
+    try {
+        serial_port.Open();
+    }
+    catch (const SerialPort::OpenFailed &) {
+        cout << "Serial Port did not open correctly." << endl;
+    }
+    serial_port.SetBaudRate(SerialPort::BAUD_115200);
+    serial_port.SetCharSize(SerialPort::CHAR_SIZE_8);
+    serial_port.SetFlowControl(SerialPort::FLOW_CONTROL_NONE);
+    serial_port.SetParity(SerialPort::PARITY_NONE);
+    serial_port.SetNumOfStopBits(SerialPort::STOP_BITS_1);
 
     x_button_clicked = false;
     y_button_clicked = false;
@@ -625,6 +641,45 @@ int main(int argc, char *argv[]) {
             imwrite("Img_0000_1.jpeg", frame2);
             system_state = 1;
         }
+        if (c == '+'){
+//            serial_data[0] = 0x46;
+//            serial_data[1] = 0x30;
+//            serial_data[2] = 0x2E;
+//            serial_data[3] = 0x31;
+//            serial_data[4] = 0x37;
+//            serial_data[5] = 0x0A;
+//            serialPort.WriteBytes(serial_data,6);
+//            serialPort.Write("F0.17\n");
+            serial_port.Write("F0.17\n");
+            cout << "Forward" << endl;
+        }
+        if (c == '-'){
+//            serial_data[0] = 0x42;
+//            serial_data[1] = 0x30;
+//            serial_data[2] = 0x2E;
+//            serial_data[3] = 0x31;
+//            serial_data[4] = 0x37;
+//            serial_data[5] = 0x0A;
+//            serialPort.WriteBytes(serial_data,6);
+//            serialPort.Write("B0.17\n");
+            serial_port.Write("B0.17\n");
+            cout << "Back" << endl;
+        }
+        while(serial_port.IsDataAvailable()) {
+            char data_byte;
+            // Specify a timeout value (in milliseconds).
+            int ms_timeout = 250 ;
+
+            data_byte = serial_port.ReadByte(ms_timeout);
+            cout << data_byte << flush;
+        }
+//        string return_data;
+//        serialPort.Read(return_data);
+//        serial_port.Read(&return_data);
+//        if (return_data.length()>0) {
+//            cout << return_data << endl;
+//        }
+//        c = ' ';
     }
 
     return return_val;

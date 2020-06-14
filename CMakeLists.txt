@@ -103,11 +103,13 @@ ENDIF()
 MESSAGE(STATUS "Using DICe headers from: ${DICE_HEADER_DIR}")
 include_directories(${DICE_HEADER_DIR})
 
-add_executable(masters_v3  SubSetData.cpp main.cpp Semaphore.cpp Semaphore.h)
+add_executable(masters_v3 SubSetData.cpp main.cpp Semaphore.cpp Semaphore.h)
 # add the dice libraries
 target_link_libraries(masters_v3
   dicecore
+  serial
 )
+
 #
 # Define the location of lib tiff, jpeg, and png:
 #
