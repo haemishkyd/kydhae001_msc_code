@@ -58,6 +58,7 @@
 
 #include "SubSetData.h"
 #include "Semaphore.h"
+#include "ScriptRun.h"
 
 #if DICE_MPI
 #  include <mpi.h>
@@ -80,7 +81,11 @@ void information_extraction();
 
 void write_timing_metrics();
 
+void read_script(string script_name);
+
 void dataMouseCallBack(int event, int x, int y, int flags, void* userdata);
+
+void projectionMouseCallBack(int event, int x, int y, int flags, void* userdata);
 
 void outputImageInformation();
 
@@ -94,6 +99,16 @@ typedef struct {
     int FrameWidth;
     int FrameHeight;
     bool WriteThreadRunning;
+    vector<scalar_t> Right_X;
+    vector<scalar_t> Right_Y;
+    vector<scalar_t> Left_X;
+    vector<scalar_t> Left_Y;
+    scalar_t User_Right_X;
+    scalar_t User_Right_Y;
+    scalar_t User_Left_X;
+    scalar_t User_Left_Y;
+    vector<string> script_stack;
+    ScriptRun *myScript;
 } MainDataStructType;
 
 Teuchos::RCP<DICe::Schema> schema;
@@ -289,7 +304,7 @@ void information_extraction() {
     *outStream << "\n--- List of images constructed successfuly ---\n" << std::endl;
 
     /******* Get the size of the images being used */
-    utils::read_image_dimensions(image_files[0].c_str(), image_width, image_height);
+    DICe::utils::read_image_dimensions(image_files[0].c_str(), image_width, image_height);
     *outStream << "Image dimensions: " << image_width << " x " << image_height << std::endl;
 
     /******* Where are we going to put the output information */
@@ -427,6 +442,37 @@ void dataMouseCallBack(int event, int x, int y, int flags, void* userdata){
     }
 }
 
+void projectionMouseCallBack(int event, int x, int y, int flags, void* userdata) {
+    if (event == EVENT_LBUTTONDOWN) {
+        srand(time(0));
+        MainDataStruct.Right_X.clear();
+        MainDataStruct.Right_Y.clear();
+        MainDataStruct.Left_X.clear();
+        MainDataStruct.Left_Y.clear();
+        for (int num_it = 0; num_it<10; num_it++) {
+            scalar_t left_x = (rand() % (640/3))+((640/2)-(640/3/2));
+            scalar_t left_y = (rand() % (480/3))+((480/2)-(480/3/2));
+            scalar_t right_x = 0;
+            scalar_t right_y = 0;
+            triangulation->project_left_to_right_sensor_coords(left_x, left_y, right_x, right_y);
+            MainDataStruct.Right_X.push_back(right_x);
+            MainDataStruct.Right_Y.push_back(right_y);
+            MainDataStruct.Left_X.push_back(left_x);
+            MainDataStruct.Left_Y.push_back(left_y);
+            cout << "Left: " << left_x << ":" << left_y << " Right: " << right_x << ":" << right_y << endl;
+        }
+    }
+    if (event == EVENT_RBUTTONDOWN){
+        scalar_t right_x = 0;
+        scalar_t right_y = 0;
+        triangulation->project_left_to_right_sensor_coords(x, y, right_x, right_y);
+        MainDataStruct.User_Left_X = x;
+        MainDataStruct.User_Left_Y = y;
+        MainDataStruct.User_Right_X = right_x;
+        MainDataStruct.User_Right_Y = right_y;
+    }
+}
+
 void write_timing_metrics() {
     // output timing
     //  write the time output to file:
@@ -439,6 +485,16 @@ void write_timing_metrics() {
         << write_time.get()->totalElapsedTime() << "," << int(1.0 / state_2_timer.get()->totalElapsedTime())<<endl;
 
     ofs.close();
+}
+
+void read_script(string script_name){
+    ifstream myfile;
+    std::string line;
+
+    myfile.open (script_name);
+    while (std::getline(myfile, line)){
+        MainDataStruct.script_stack.push_back(line);
+    }
 }
 
 void outputImageInformation(){
@@ -530,8 +586,18 @@ int main(int argc, char *argv[]) {
     int return_val;
     float Brightness;
     int system_state = 0;
-    unsigned char serial_data[10];
+    bool only_cc = false;
+    string test_file_name;
     pthread_t threads[1];
+
+    if (argc > 1){
+        if (strcmp(argv[1],"--only_cc") == 0){
+            only_cc = true;
+            cout<< "Only executing cross correlation." << endl;
+        }else{
+            read_script(argv[1]);
+        }
+    }
 
     string port("/dev/ttyUSB0");
     SerialPort serial_port(port);
@@ -541,20 +607,27 @@ int main(int argc, char *argv[]) {
     catch (const SerialPort::OpenFailed &) {
         cout << "Serial Port did not open correctly." << endl;
     }
-    serial_port.SetBaudRate(SerialPort::BAUD_115200);
-    serial_port.SetCharSize(SerialPort::CHAR_SIZE_8);
-    serial_port.SetFlowControl(SerialPort::FLOW_CONTROL_NONE);
-    serial_port.SetParity(SerialPort::PARITY_NONE);
-    serial_port.SetNumOfStopBits(SerialPort::STOP_BITS_1);
+    if (serial_port.IsOpen()) {
+        serial_port.SetBaudRate(SerialPort::BAUD_115200);
+        serial_port.SetCharSize(SerialPort::CHAR_SIZE_8);
+        serial_port.SetFlowControl(SerialPort::FLOW_CONTROL_NONE);
+        serial_port.SetParity(SerialPort::PARITY_NONE);
+        serial_port.SetNumOfStopBits(SerialPort::STOP_BITS_1);
+    }
 
     x_button_clicked = false;
     y_button_clicked = false;
     z_button_clicked = false;
     MainDataStruct.WriteThreadRunning = true;
 
-    Brightness = cap1.get(CV_CAP_PROP_BRIGHTNESS);
-    MainDataStruct.FrameWidth = cap1.get(CV_CAP_PROP_FRAME_WIDTH);
-    MainDataStruct.FrameHeight = cap1.get(CV_CAP_PROP_FRAME_HEIGHT);
+    cap2.set(CAP_PROP_FRAME_WIDTH,640);
+    cap2.set(CAP_PROP_FRAME_HEIGHT,480);
+    cap1.set(CAP_PROP_FRAME_WIDTH,640);
+    cap1.set(CAP_PROP_FRAME_HEIGHT,480);
+
+    Brightness = 0;
+    MainDataStruct.FrameWidth = 640;
+    MainDataStruct.FrameHeight = 480;
 
     cout << "====================================" << endl << endl;
     cout << "Default Brightness -------> " << Brightness << endl;
@@ -592,7 +665,38 @@ int main(int argc, char *argv[]) {
                 cap2 >> frame1; // get a new frame from camera
                 cap1 >> frame2;
 
+
+                if (!MainDataStruct.Left_X.empty() || !MainDataStruct.Left_Y.empty()) {
+                    for (int num_it = 0; num_it < MainDataStruct.Left_X.size(); num_it++) {
+                        Scalar colour_choice = Scalar(255, 0 , 0);
+                        circle(frame1, Point(MainDataStruct.Left_X.at(num_it), MainDataStruct.Left_Y.at(num_it)), 3,
+                               colour_choice, 2);
+                        circle(frame2, Point(MainDataStruct.Right_X.at(num_it), MainDataStruct.Right_Y.at(num_it)), 3,
+                               colour_choice, 2);
+                    }
+                }
+                if ((MainDataStruct.User_Left_X != 0) || (MainDataStruct.User_Left_Y != 0)){
+                    Scalar colour_choice = Scalar(0, 255 , 0);
+                    circle(frame1, Point(MainDataStruct.User_Left_X, MainDataStruct.User_Left_Y), 3,
+                           colour_choice, 2);
+                    circle(frame2, Point(MainDataStruct.User_Right_X, MainDataStruct.User_Right_Y), 3,
+                           colour_choice, 2);
+                }
                 hconcat(frame1, frame2, OutputFrame);
+                if (!MainDataStruct.Left_X.empty() || !MainDataStruct.Left_Y.empty()) {
+                    for (int num_it = 0; num_it < MainDataStruct.Left_X.size(); num_it++) {
+                        Scalar colour_choice = Scalar(255, 0 , 0);
+                        line(OutputFrame, Point(MainDataStruct.Left_X.at(num_it), MainDataStruct.Left_Y.at(num_it)),
+                             Point(MainDataStruct.Right_X.at(num_it) + 640, MainDataStruct.Right_Y.at(num_it)),
+                             colour_choice);
+                    }
+                }
+                if ((MainDataStruct.User_Right_X != 0) || (MainDataStruct.User_Right_Y != 0)){
+                    Scalar colour_choice = Scalar(0, 255 , 0);
+                    line(OutputFrame, Point(MainDataStruct.User_Left_X, MainDataStruct.User_Left_Y),
+                         Point(MainDataStruct.User_Right_X + 640, MainDataStruct.User_Right_Y),
+                         colour_choice);
+                }
                 imshow("Real Time DIC - Haemish Kyd", OutputFrame);
             }
                 break;
@@ -606,9 +710,15 @@ int main(int argc, char *argv[]) {
                 cross_and_trian_time_str.str("");
                 cross_and_trian_time_str << cross_time.get()->totalElapsedTime();
 
-                (void)pthread_create(&threads[0], NULL, WriteImageFiles, (void *)0);
-                ReadComplete.notify(0);
-                system_state = 2;
+                if (only_cc == true){
+                    system_state = 0;
+                    setMouseCallback("Real Time DIC - Haemish Kyd",projectionMouseCallBack);
+                }
+                else {
+                    (void) pthread_create(&threads[0], NULL, WriteImageFiles, (void *) 0);
+                    ReadComplete.notify(0);
+                    system_state = 2;
+                }
                 break;
             case 2: {
                 Teuchos::TimeMonitor state_2_monitor(*state_2_timer);
@@ -641,45 +751,33 @@ int main(int argc, char *argv[]) {
             imwrite("Img_0000_1.jpeg", frame2);
             system_state = 1;
         }
-        if (c == '+'){
-//            serial_data[0] = 0x46;
-//            serial_data[1] = 0x30;
-//            serial_data[2] = 0x2E;
-//            serial_data[3] = 0x31;
-//            serial_data[4] = 0x37;
-//            serial_data[5] = 0x0A;
-//            serialPort.WriteBytes(serial_data,6);
-//            serialPort.Write("F0.17\n");
-            serial_port.Write("F0.17\n");
-            cout << "Forward" << endl;
+        if (c == 'r') {
+            ScriptRun temp = ScriptRun(&MainDataStruct.script_stack);
+            MainDataStruct.myScript = &temp;
         }
-        if (c == '-'){
-//            serial_data[0] = 0x42;
-//            serial_data[1] = 0x30;
-//            serial_data[2] = 0x2E;
-//            serial_data[3] = 0x31;
-//            serial_data[4] = 0x37;
-//            serial_data[5] = 0x0A;
-//            serialPort.WriteBytes(serial_data,6);
-//            serialPort.Write("B0.17\n");
-            serial_port.Write("B0.17\n");
-            cout << "Back" << endl;
+        if (MainDataStruct.myScript != NULL){
+            if (MainDataStruct.myScript->ScriptLoaded){
+                MainDataStruct.myScript->ExecuteStep(&serial_port);
+            }
         }
-        while(serial_port.IsDataAvailable()) {
-            char data_byte;
-            // Specify a timeout value (in milliseconds).
-            int ms_timeout = 250 ;
+        if (serial_port.IsOpen()) {
+            if (c == '+') {
+                serial_port.Write("F0.17\n");
+                cout << "Forward" << endl;
+            }
+            if (c == '-') {
+                serial_port.Write("B0.17\n");
+                cout << "Back" << endl;
+            }
+            while (serial_port.IsDataAvailable()) {
+                char data_byte;
+                // Specify a timeout value (in milliseconds).
+                int ms_timeout = 250;
 
-            data_byte = serial_port.ReadByte(ms_timeout);
-            cout << data_byte << flush;
+                data_byte = serial_port.ReadByte(ms_timeout);
+                cout << data_byte << flush;
+            }
         }
-//        string return_data;
-//        serialPort.Read(return_data);
-//        serial_port.Read(&return_data);
-//        if (return_data.length()>0) {
-//            cout << return_data << endl;
-//        }
-//        c = ' ';
     }
 
     return return_val;
