@@ -101,7 +101,7 @@ IF (NOT DEFINED DICE_HEADER_DIR)
   (-D DICE_HEADER_DIR:FILEPATH=<DICe_include_prefix>)!")
 ENDIF()
 MESSAGE(STATUS "Using DICe headers from: ${DICE_HEADER_DIR}")
-include_directories(${DICE_HEADER_DIR})
+include_directories(${DICE_HEADER_DIR} /home/haemish/Masters/CodeRepo/masters_v3)
 
 add_executable(masters_v3 SubSetData.cpp main.cpp Semaphore.cpp Semaphore.h ScriptRun.cpp ScriptRun.h)
 # add the dice libraries
@@ -147,7 +147,7 @@ target_link_libraries(masters_v3 diceutils)
 
 # find OpenCV
 message(STATUS "Looking for OpenCV in dir: ${OpenCV_DIR}")
-find_package( OpenCV NO_DEFAULT_PATH PATHS ${OpenCV_DIR} )
+find_package( OpenCV NO_DEFAULT_PATH PATHS ${OpenCV_DIR})
 IF(OpenCV_FOUND)
   set(DICE_ENABLE_OPENCV ON)
 ELSE()

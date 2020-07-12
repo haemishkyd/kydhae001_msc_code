@@ -5,34 +5,68 @@
 #include <vector>
 #include <iostream>
 #include <chrono>
-#include <sstream>
 #include <iterator>
+
+#include <DICe_ImageIO.h>
+#include <DICe_Schema.h>
+#include <DICe_Triangulation.h>
+
+#include <sciplot/sciplot.hpp>
+
 #include "SerialPort.h"
 #include "ScriptRun.h"
 
+using namespace DICe::field_enums;
+using namespace DICe;
 using namespace std;
 using namespace std::chrono;
+using namespace sciplot;
 
-ScriptRun::ScriptRun(vector<string> *p_stack){
-    ScriptStack = p_stack;
+plot plot_obj;
+
+ScriptRun::ScriptRun(vector<string> *p_stack, SerialPort *controlPort, Teuchos::RCP<DICe::Schema> *passedSchema){
+    _script_stack = p_stack;
+    _serial_port = controlPort;
+    _schema = passedSchema;
     CurrentStackPointer = 0;
-    ScriptLoaded = true;
+    X_Axis_Counter = 0;
+    _script_loaded = true;
+    DataSampleInterval = 0;
+    // Change its palette
+    plot_obj.palette("dark2");
+    cout << "Script Loaded: "<< _script_stack->size() << " lines." << endl;
+    for (int p=0; p<_script_stack->size();p++){
+        cout << _script_stack->at(p) << endl;
+    }
 }
 
-void ScriptRun::ExecuteStep(SerialPort *controlPort){
+void ScriptRun::ExecuteStep(){
     static int OldStackPointer=1000000;
-    if (ScriptLoaded == true) {
+    if (_script_loaded == true) {
         if (OldStackPointer != CurrentStackPointer){
             IteratorCount = 0;
             OldStackPointer = CurrentStackPointer;
         }
-        string current_command = ScriptStack->at(CurrentStackPointer);
+        cout << "Load Command: " << CurrentStackPointer << "/" << _script_stack->size() << endl;
+        string current_command = _script_stack->at(CurrentStackPointer);
+        cout << current_command << endl;
         char action = current_command.at(0);
         string data = current_command.substr(2,2);
-        cout << current_command << endl;
 
+        duration<double, std::milli> time_span = high_resolution_clock::now() - DataSampleTimer;
+        if ((DataSampleInterval > 0) && (time_span.count() > DataSampleInterval)){
+            _x_plot.push_back(X_Axis_Counter++);
+            _y_plot.push_back((*_schema)->local_field_value(1, MODEL_DISPLACEMENT_Z_FS));
+            DataSampleTimer = high_resolution_clock::now();
+        }
+
+        if (action == 'S') {
+            DataSampleInterval = stoi(data)*100; //stored in 100s of milliseconds in script.
+            cout << "Sample Period Set" << endl;
+            CurrentStackPointer++;
+        }
         if (action == 'F') {
-            controlPort->Write("F0.17\n");
+            _serial_port->Write("F0.17\n");
             IteratorCount++;
             if (IteratorCount >= stoi(data)) {
                 LastExecutionPoint = high_resolution_clock::now();
@@ -42,7 +76,7 @@ void ScriptRun::ExecuteStep(SerialPort *controlPort){
         }
 
         if (action == 'B') {
-            controlPort->Write("B0.17\n");
+            _serial_port->Write("B0.17\n");
             IteratorCount++;
             if (IteratorCount >= stoi(data)) {
                 LastExecutionPoint = high_resolution_clock::now();
@@ -60,9 +94,16 @@ void ScriptRun::ExecuteStep(SerialPort *controlPort){
             }
         }
 
+        if (current_command == "DRAW") {
+            plot_obj.draw(_x_plot,_y_plot);
+            plot_obj.show();
+            cout << "Drawing Result" << endl;
+            CurrentStackPointer++;
+        }
+
         if (current_command == "END") {
             cout << "Executing END" << endl;
-            ScriptLoaded = false;
+            _script_loaded = false;
         }
     }
 }

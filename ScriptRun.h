@@ -5,19 +5,29 @@
 #ifndef CUSTOM_APP_SCRIPTRUN_H
 #define CUSTOM_APP_SCRIPTRUN_H
 
+
 using namespace std;
 using namespace std::chrono;
 
 class ScriptRun {
 public:
-    vector<string> *ScriptStack;
-    high_resolution_clock::time_point LastExecutionPoint;
-    int CurrentStackPointer;
-    bool ScriptLoaded;
+    vector<string> *_script_stack;
+    SerialPort *_serial_port;
+    Teuchos::RCP<DICe::Schema> *_schema;
+    std::vector<float> _x_plot;
+    std::vector<float> _y_plot;
+    bool _script_loaded;
     int IteratorCount;
+    int X_Axis_Counter;
+    high_resolution_clock::time_point LastExecutionPoint;
+    high_resolution_clock::time_point DataSampleTimer;
+    int DataSampleInterval;
+    int CurrentStackPointer;
 
-    ScriptRun(vector<string> *p_stack);
-    void ExecuteStep(SerialPort *controlPort);
+    ScriptRun(vector<string> *p_stack, SerialPort *controlPort, Teuchos::RCP<DICe::Schema> *passedSchema);
+    void ExecuteStep();
+
+private:
 };
 
 

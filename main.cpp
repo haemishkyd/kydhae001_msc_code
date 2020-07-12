@@ -657,6 +657,7 @@ int main(int argc, char *argv[]) {
         << "Write Process" << "," << "Hz" <<endl;
     ofs.close();
 
+    ScriptRun script_obj = (ScriptRun(&MainDataStruct.script_stack, &serial_port, &schema));
     namedWindow("Real Time DIC - Haemish Kyd", WINDOW_AUTOSIZE);
     for (;;) {
         switch (system_state) {
@@ -752,12 +753,11 @@ int main(int argc, char *argv[]) {
             system_state = 1;
         }
         if (c == 'r') {
-            ScriptRun temp = ScriptRun(&MainDataStruct.script_stack);
-            MainDataStruct.myScript = &temp;
+            MainDataStruct.myScript = &script_obj;
         }
         if (MainDataStruct.myScript != NULL){
-            if (MainDataStruct.myScript->ScriptLoaded){
-                MainDataStruct.myScript->ExecuteStep(&serial_port);
+            if (MainDataStruct.myScript->_script_loaded){
+                MainDataStruct.myScript->ExecuteStep();
             }
         }
         if (serial_port.IsOpen()) {
