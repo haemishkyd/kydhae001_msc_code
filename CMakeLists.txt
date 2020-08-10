@@ -103,7 +103,7 @@ ENDIF()
 MESSAGE(STATUS "Using DICe headers from: ${DICE_HEADER_DIR}")
 include_directories(${DICE_HEADER_DIR} /home/haemish/Masters/CodeRepo/masters_v3)
 
-add_executable(masters_v3 SubSetData.cpp main.cpp Semaphore.cpp Semaphore.h ScriptRun.cpp ScriptRun.h)
+add_executable(masters_v3 SubSetData.cpp main.cpp Semaphore.cpp Semaphore.h ScriptRun.cpp ScriptRun.h calibrate.cpp calibrate.h)
 # add the dice libraries
 target_link_libraries(masters_v3
   dicecore

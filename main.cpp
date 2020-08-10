@@ -59,6 +59,7 @@
 #include "SubSetData.h"
 #include "Semaphore.h"
 #include "ScriptRun.h"
+#include "calibrate.h"
 
 #if DICE_MPI
 #  include <mpi.h>
@@ -502,7 +503,9 @@ void outputImageInformation(){
     drawSubsets(&frame1,&schema);
 
     Mat OutputFrame;
+    Mat DisplayFrame;
     hconcat(frame1,frame2,OutputFrame);
+    resize(OutputFrame,DisplayFrame,Size(1280,480));
     data.release();
     data = Mat(500, 1280, CV_8UC3, Scalar(0, 0, 0));
     Scalar textColour = Scalar(255,255,0);
@@ -548,23 +551,23 @@ void outputImageInformation(){
     time_str << write_time.get()->totalElapsedTime();
     putText(data, time_str.str(), Point(300, 430), FONT_HERSHEY_SIMPLEX, 1, textColour);
 
-    vconcat(OutputFrame,data,OutputFrame);
+    vconcat(DisplayFrame,data,DisplayFrame);
 
     x_button = Rect(0,960,400, 20);
     y_button = Rect(400,960,400, 20);
     z_button = Rect(800,960,400, 20);
     Scalar rectangle_color;
     rectangle_color = x_button_clicked == true?Scalar(100,127,255):Scalar(0,255,0);
-    rectangle(OutputFrame,x_button,rectangle_color,1,8,0);
+    rectangle(DisplayFrame,x_button,rectangle_color,1,8,0);
     rectangle_color = y_button_clicked == true?Scalar(100,127,255):Scalar(0,255,0);
-    rectangle(OutputFrame,y_button,rectangle_color,1,8,0);
+    rectangle(DisplayFrame,y_button,rectangle_color,1,8,0);
     rectangle_color = z_button_clicked == true?Scalar(100,127,255):Scalar(0,255,0);
-    rectangle(OutputFrame,z_button,rectangle_color,1,8,0);
+    rectangle(DisplayFrame,z_button,rectangle_color,1,8,0);
 
-    putText(OutputFrame, "Show X", Point(150, 975), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,255,0));
-    putText(OutputFrame, "Show Y", Point(550, 975), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,255,0));
-    putText(OutputFrame, "Show Z", Point(950, 975), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,255,0));
-    imshow("Real Time DIC - Haemish Kyd",OutputFrame);
+    putText(DisplayFrame, "Show X", Point(150, 975), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,255,0));
+    putText(DisplayFrame, "Show Y", Point(550, 975), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,255,0));
+    putText(DisplayFrame, "Show Z", Point(950, 975), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,255,0));
+    imshow("Real Time DIC - Haemish Kyd",DisplayFrame);
     setMouseCallback("Real Time DIC - Haemish Kyd",dataMouseCallBack);
 }
 
@@ -584,6 +587,7 @@ void *WriteImageFiles(void *threadid) {
 
 int main(int argc, char *argv[]) {
     int return_val;
+    int start_calibration = false;
     float Brightness;
     int system_state = 0;
     bool only_cc = false;
@@ -620,10 +624,10 @@ int main(int argc, char *argv[]) {
     z_button_clicked = false;
     MainDataStruct.WriteThreadRunning = true;
 
-    cap2.set(CAP_PROP_FRAME_WIDTH,640);
-    cap2.set(CAP_PROP_FRAME_HEIGHT,480);
-    cap1.set(CAP_PROP_FRAME_WIDTH,640);
-    cap1.set(CAP_PROP_FRAME_HEIGHT,480);
+    cap2.set(CAP_PROP_FRAME_WIDTH,1280);
+    cap2.set(CAP_PROP_FRAME_HEIGHT,960);
+    cap1.set(CAP_PROP_FRAME_WIDTH,1280);
+    cap1.set(CAP_PROP_FRAME_HEIGHT,960);
 
     Brightness = 0;
     MainDataStruct.FrameWidth = 640;
@@ -663,10 +667,14 @@ int main(int argc, char *argv[]) {
         switch (system_state) {
             case 0: {
                 Mat OutputFrame;
+                Mat DisplayFrame;
                 cap2 >> frame1; // get a new frame from camera
                 cap1 >> frame2;
 
-
+                /**
+                 * If we only do the cross correlation (mapping points to points) we can use
+                 * this to trace the accuracy of the points.
+                 */
                 if (!MainDataStruct.Left_X.empty() || !MainDataStruct.Left_Y.empty()) {
                     for (int num_it = 0; num_it < MainDataStruct.Left_X.size(); num_it++) {
                         Scalar colour_choice = Scalar(255, 0 , 0);
@@ -676,6 +684,10 @@ int main(int argc, char *argv[]) {
                                colour_choice, 2);
                     }
                 }
+                /**
+                 * This allows for one user point that allows one to check the accuracy of a
+                 * point in the left mapped to a point in the right.
+                 */
                 if ((MainDataStruct.User_Left_X != 0) || (MainDataStruct.User_Left_Y != 0)){
                     Scalar colour_choice = Scalar(0, 255 , 0);
                     circle(frame1, Point(MainDataStruct.User_Left_X, MainDataStruct.User_Left_Y), 3,
@@ -684,6 +696,10 @@ int main(int argc, char *argv[]) {
                            colour_choice, 2);
                 }
                 hconcat(frame1, frame2, OutputFrame);
+                /**
+                 * If we only do the cross correlation (mapping points to points) we can
+                 * use this to trace the accuracy of the points.
+                 */
                 if (!MainDataStruct.Left_X.empty() || !MainDataStruct.Left_Y.empty()) {
                     for (int num_it = 0; num_it < MainDataStruct.Left_X.size(); num_it++) {
                         Scalar colour_choice = Scalar(255, 0 , 0);
@@ -698,7 +714,13 @@ int main(int argc, char *argv[]) {
                          Point(MainDataStruct.User_Right_X + 640, MainDataStruct.User_Right_Y),
                          colour_choice);
                 }
-                imshow("Real Time DIC - Haemish Kyd", OutputFrame);
+
+                resize(OutputFrame,DisplayFrame,Size(1280,480));
+                imshow("Real Time DIC - Haemish Kyd", DisplayFrame);
+
+                if (start_calibration == true){
+                    run_calibration(frame1,frame2,&start_calibration);
+                }
             }
                 break;
             case 1:
@@ -742,16 +764,31 @@ int main(int argc, char *argv[]) {
 
         char c = waitKey(5);
 
+        /**
+         * Run the calibration
+         */
+        if (c == 'c'){
+            start_calibration = true;
+        }
+        /**
+         * Quit the program completely
+         */
         if (c == 'q') {
             MainDataStruct.WriteThreadRunning = false;
             pthread_cancel(threads[0]);
             break;
         }
+        /**
+         * Initiate the 3D DIC
+         */
         if (c == 'i') {
             imwrite("Img_0000_0.jpeg", frame1);
             imwrite("Img_0000_1.jpeg", frame2);
             system_state = 1;
         }
+        /**
+         * Run the pre-loaded script
+         */
         if (c == 'r') {
             MainDataStruct.myScript = &script_obj;
         }
@@ -761,12 +798,18 @@ int main(int argc, char *argv[]) {
             }
         }
         if (serial_port.IsOpen()) {
+            /**
+             * Run the target forward a millimetre
+             */
             if (c == '+') {
-                serial_port.Write("F0.17\n");
+                serial_port.Write("F0.12\n");
                 cout << "Forward" << endl;
             }
+            /**
+             * Run the target backwards a millimetre
+             */
             if (c == '-') {
-                serial_port.Write("B0.17\n");
+                serial_port.Write("B0.12\n");
                 cout << "Back" << endl;
             }
             while (serial_port.IsDataAvailable()) {

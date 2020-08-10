@@ -56,7 +56,7 @@ void ScriptRun::ExecuteStep(){
         duration<double, std::milli> time_span = high_resolution_clock::now() - DataSampleTimer;
         if ((DataSampleInterval > 0) && (time_span.count() > DataSampleInterval)){
             _x_plot.push_back(X_Axis_Counter++);
-            _y_plot.push_back((*_schema)->local_field_value(1, MODEL_DISPLACEMENT_Z_FS));
+            _y_plot.push_back((*_schema)->local_field_value(2, MODEL_DISPLACEMENT_Z_FS));
             DataSampleTimer = high_resolution_clock::now();
         }
 
@@ -66,7 +66,7 @@ void ScriptRun::ExecuteStep(){
             CurrentStackPointer++;
         }
         if (action == 'F') {
-            _serial_port->Write("F0.17\n");
+            _serial_port->Write("F0.12\n");
             IteratorCount++;
             if (IteratorCount >= stoi(data)) {
                 LastExecutionPoint = high_resolution_clock::now();
@@ -76,7 +76,7 @@ void ScriptRun::ExecuteStep(){
         }
 
         if (action == 'B') {
-            _serial_port->Write("B0.17\n");
+            _serial_port->Write("B0.12\n");
             IteratorCount++;
             if (IteratorCount >= stoi(data)) {
                 LastExecutionPoint = high_resolution_clock::now();
