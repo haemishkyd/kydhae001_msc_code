@@ -65,6 +65,8 @@
 #  include <mpi.h>
 #endif
 
+#define ARDUCAM 1
+
 using namespace DICe::field_enums;
 using namespace DICe;
 using namespace cv;
@@ -89,6 +91,8 @@ void dataMouseCallBack(int event, int x, int y, int flags, void* userdata);
 void projectionMouseCallBack(int event, int x, int y, int flags, void* userdata);
 
 void outputImageInformation();
+
+string gstreamer_pipeline (int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method);
 
 typedef struct {
     int num_frames;
@@ -141,8 +145,12 @@ Mat frame1, frame2, data(500, 1200, CV_8UC3, Scalar(0, 0, 0));;
 Semaphore WriteComplete(0);
 Semaphore ReadComplete(0);
 
+#ifndef ARDUCAM
 VideoCapture cap2(0); // open the default camera
 VideoCapture cap1(2); // open the default camera
+#else
+VideoCapture cap;
+#endif
 
 bool read_input_data_files() {
     /**
@@ -573,16 +581,35 @@ void outputImageInformation(){
 
 void *WriteImageFiles(void *threadid) {
     long tid;
+#ifdef ARDUCAM    
+    Mat InputFrame;
+#endif    
     tid = (long)threadid;
     while (MainDataStruct.WriteThreadRunning) {
         ReadComplete.wait(tid);
+#ifndef ARDUCAM        
         cap2 >> frame1; // get a new frame from camera
         cap1 >> frame2;
+#else
+        if (!cap.read(InputFrame)) {
+			std::cout<<"Capture read error"<<std::endl;
+			break;
+		}
+		frame1 = InputFrame(cv::Rect(0,0,InputFrame.cols/2,InputFrame.rows));
+		frame2 = InputFrame(cv::Rect(InputFrame.cols/2,0,InputFrame.cols/2,InputFrame.rows));
+#endif
         imwrite("Img_0001_0.jpeg", frame1);
         imwrite("Img_0001_1.jpeg", frame2);
         WriteComplete.notify(tid);
     }
     pthread_exit(NULL);
+}
+
+string gstreamer_pipeline (int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method) {    
+    return "nvarguscamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(capture_width) + ", height=(int)" +
+           std::to_string(capture_height) + ", format=(string)NV12, framerate=(fraction)" + std::to_string(framerate) +
+           "/1 ! nvvidconv flip-method=" + std::to_string(flip_method) + " ! video/x-raw, width=(int)" + std::to_string(display_width) + ", height=(int)" +
+           std::to_string(display_height) + ", format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
 }
 
 int main(int argc, char *argv[]) {
@@ -593,7 +620,18 @@ int main(int argc, char *argv[]) {
     bool only_cc = false;
     string test_file_name;
     pthread_t threads[1];
-
+    Mat OutputFrame;
+    Mat DisplayFrame;
+#ifdef ARDUCAM
+	int capture_width = 4032 ;
+    int capture_height = 3040 ;
+    int display_width = 2048 ;
+    int display_height = 1536 ;    
+    int framerate = 13 ;
+    int flip_method = 2 ;
+    Mat InputFrame;
+#endif    
+    
     if (argc > 1){
         if (strcmp(argv[1],"--only_cc") == 0){
             only_cc = true;
@@ -624,10 +662,12 @@ int main(int argc, char *argv[]) {
     z_button_clicked = false;
     MainDataStruct.WriteThreadRunning = true;
 
+#ifndef ARDUCAM
     cap2.set(CAP_PROP_FRAME_WIDTH,1280);
     cap2.set(CAP_PROP_FRAME_HEIGHT,960);
     cap1.set(CAP_PROP_FRAME_WIDTH,1280);
     cap1.set(CAP_PROP_FRAME_HEIGHT,960);
+#endif    
 
     Brightness = 0;
     MainDataStruct.FrameWidth = 640;
@@ -639,6 +679,7 @@ int main(int argc, char *argv[]) {
     cout << "Default Height     -------> " << MainDataStruct.FrameHeight << endl;
     cout << "====================================" << endl;
 
+#ifndef ARDUCAM
     if (!cap1.isOpened()) {  // check if we succeeded
         std::cout << "First camera cannot be found\n";
         return -1;
@@ -651,6 +692,24 @@ int main(int argc, char *argv[]) {
     } else {
         cout << "Camera 2 is open\n";
     }
+ #else
+	std::string pipeline = gstreamer_pipeline(capture_width,
+	capture_height,
+	display_width,
+	display_height,
+	framerate,
+	flip_method);
+    std::cout << "Using pipeline: \n\t" << pipeline << "\n";
+    
+    cap.open(pipeline, cv::CAP_GSTREAMER);
+    
+	if(!cap.isOpened()) {
+		std::cout<<"Failed to open camera."<<std::endl;
+		return (-1);
+    } else {
+		cout << "Arducam is open\n";
+	}
+ #endif
 
     //This is here simply to clear the file.
     std::stringstream timeFileName;
@@ -666,11 +725,17 @@ int main(int argc, char *argv[]) {
     for (;;) {
         switch (system_state) {
             case 0: {
-                Mat OutputFrame;
-                Mat DisplayFrame;
+#ifndef ARDUCAM                
                 cap2 >> frame1; // get a new frame from camera
                 cap1 >> frame2;
-
+#else
+				if (!cap.read(InputFrame)) {
+					std::cout<<"Capture read error"<<std::endl;
+					break;
+				}
+				frame1 = InputFrame(cv::Rect(0,0,InputFrame.cols/2,InputFrame.rows));
+				frame2 = InputFrame(cv::Rect(InputFrame.cols/2,0,InputFrame.cols/2,InputFrame.rows));
+#endif				
                 /**
                  * If we only do the cross correlation (mapping points to points) we can use
                  * this to trace the accuracy of the points.
@@ -724,8 +789,17 @@ int main(int argc, char *argv[]) {
             }
                 break;
             case 1:
+#ifndef ARDUCAM            
                 cap2 >> frame1; // get a new frame from camera
                 cap1 >> frame2;
+#else
+				if (!cap.read(InputFrame)) {
+					std::cout<<"Capture read error"<<std::endl;
+					break;
+				}
+				frame1 = InputFrame(cv::Rect(0,0,InputFrame.cols/2,InputFrame.rows));
+				frame2 = InputFrame(cv::Rect(InputFrame.cols/2,0,InputFrame.cols/2,InputFrame.rows));
+#endif
                 DICe::initialize(argc, argv);
                 information_extraction();
                 run_cross_correlation();
@@ -823,5 +897,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
+#ifndef ARDUCAM
+	cap1.release();
+	cap2.release();
+#else
+	cap.release();
+#endif	
+    cv::destroyAllWindows() ;
     return return_val;
 }
