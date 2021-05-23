@@ -65,8 +65,6 @@
 #  include <mpi.h>
 #endif
 
-#define ARDUCAM 1
-
 using namespace DICe::field_enums;
 using namespace DICe;
 using namespace cv;
@@ -114,6 +112,7 @@ typedef struct {
     scalar_t User_Left_Y;
     vector<string> script_stack;
     ScriptRun *myScript;
+    bool use_arducam;
 } MainDataStructType;
 
 Teuchos::RCP<DICe::Schema> schema;
@@ -145,12 +144,9 @@ Mat frame1, frame2, data(500, 1200, CV_8UC3, Scalar(0, 0, 0));;
 Semaphore WriteComplete(0);
 Semaphore ReadComplete(0);
 
-#ifndef ARDUCAM
-VideoCapture cap2(0); // open the default camera
-VideoCapture cap1(2); // open the default camera
-#else
-VideoCapture cap;
-#endif
+VideoCapture cap2; // open the default camera
+VideoCapture cap1; // open the default camera
+
 
 bool read_input_data_files() {
     /**
@@ -581,23 +577,25 @@ void outputImageInformation(){
 
 void *WriteImageFiles(void *threadid) {
     long tid;
-#ifdef ARDUCAM    
     Mat InputFrame;
-#endif    
     tid = (long)threadid;
     while (MainDataStruct.WriteThreadRunning) {
         ReadComplete.wait(tid);
-#ifndef ARDUCAM        
-        cap2 >> frame1; // get a new frame from camera
-        cap1 >> frame2;
-#else
-        if (!cap.read(InputFrame)) {
-			std::cout<<"Capture read error"<<std::endl;
-			break;
-		}
-		frame1 = InputFrame(cv::Rect(0,0,InputFrame.cols/2,InputFrame.rows));
-		frame2 = InputFrame(cv::Rect(InputFrame.cols/2,0,InputFrame.cols/2,InputFrame.rows));
-#endif
+        if (!MainDataStruct.use_arducam)
+        {
+            cap2 >> frame1; // get a new frame from camera
+            cap1 >> frame2;
+        }
+        else
+        {
+            if (!cap1.read(InputFrame))
+            {
+                std::cout << "Capture read error" << std::endl;
+                break;
+            }
+            frame1 = InputFrame(cv::Rect(0, 0, InputFrame.cols / 2, InputFrame.rows));
+            frame2 = InputFrame(cv::Rect(InputFrame.cols / 2, 0, InputFrame.cols / 2, InputFrame.rows));
+        }
         imwrite("Img_0001_0.jpeg", frame1);
         imwrite("Img_0001_1.jpeg", frame2);
         WriteComplete.notify(tid);
@@ -622,7 +620,6 @@ int main(int argc, char *argv[]) {
     pthread_t threads[1];
     Mat OutputFrame;
     Mat DisplayFrame;
-#ifdef ARDUCAM
 	int capture_width = 4032 ;
     int capture_height = 3040 ;
     int display_width = 2048 ;
@@ -630,13 +627,31 @@ int main(int argc, char *argv[]) {
     int framerate = 13 ;
     int flip_method = 2 ;
     Mat InputFrame;
-#endif    
     
-    if (argc > 1){
-        if (strcmp(argv[1],"--only_cc") == 0){
+    MainDataStruct.use_arducam = false;
+    if (argc == 3){
+        if (strcmp(argv[1], "--arducam") == 0)
+        {
+            MainDataStruct.use_arducam = true;
+        }
+        if (strcmp(argv[2], "--only_cc") == 0)
+        {
             only_cc = true;
-            cout<< "Only executing cross correlation." << endl;
-        }else{
+            cout << "Only executing cross correlation." << endl;
+        }
+        else
+        {
+            read_script(argv[2]);
+        }
+    }
+    else if (argc == 1){
+        if (strcmp(argv[1], "--only_cc") == 0)
+        {
+            only_cc = true;
+            cout << "Only executing cross correlation." << endl;
+        }
+        else
+        {
             read_script(argv[1]);
         }
     }
@@ -662,12 +677,13 @@ int main(int argc, char *argv[]) {
     z_button_clicked = false;
     MainDataStruct.WriteThreadRunning = true;
 
-#ifndef ARDUCAM
-    cap2.set(CAP_PROP_FRAME_WIDTH,1280);
-    cap2.set(CAP_PROP_FRAME_HEIGHT,960);
-    cap1.set(CAP_PROP_FRAME_WIDTH,1280);
-    cap1.set(CAP_PROP_FRAME_HEIGHT,960);
-#endif    
+    if (!MainDataStruct.use_arducam)
+    {
+        cap2.set(CAP_PROP_FRAME_WIDTH,1280);
+        cap2.set(CAP_PROP_FRAME_HEIGHT,960);
+        cap1.set(CAP_PROP_FRAME_WIDTH,1280);
+        cap1.set(CAP_PROP_FRAME_HEIGHT,960);
+    }
 
     Brightness = 0;
     MainDataStruct.FrameWidth = 640;
@@ -679,37 +695,41 @@ int main(int argc, char *argv[]) {
     cout << "Default Height     -------> " << MainDataStruct.FrameHeight << endl;
     cout << "====================================" << endl;
 
-#ifndef ARDUCAM
-    if (!cap1.isOpened()) {  // check if we succeeded
-        std::cout << "First camera cannot be found\n";
-        return -1;
-    } else {
-        cout << "Camera 1 is open\n";
+    if (!MainDataStruct.use_arducam)
+    {
+        cap1.open(1);
+        cap2.open(2);
+        if (!cap1.isOpened()) {  // check if we succeeded
+            std::cout << "First camera cannot be found\n";
+            return -1;
+        } else {
+            cout << "Camera 1 is open\n";
+        }
+        if (!cap2.isOpened()) {  // check if we succeeded
+            std::cout << "Second camera cannot be found\n";
+            return -1;
+        } else {
+            cout << "Camera 2 is open\n";
+        }
     }
-    if (!cap2.isOpened()) {  // check if we succeeded
-        std::cout << "Second camera cannot be found\n";
-        return -1;
-    } else {
-        cout << "Camera 2 is open\n";
+    else{ 
+        std::string pipeline = gstreamer_pipeline(capture_width,
+        capture_height,
+        display_width,
+        display_height,
+        framerate,
+        flip_method);
+        std::cout << "Using pipeline: \n\t" << pipeline << "\n";
+        
+        cap1.open(pipeline, cv::CAP_GSTREAMER);
+        
+        if(!cap1.isOpened()) {
+            std::cout<<"Failed to open camera."<<std::endl;
+            return (-1);
+        } else {
+            cout << "Arducam is open\n";
+        }
     }
- #else
-	std::string pipeline = gstreamer_pipeline(capture_width,
-	capture_height,
-	display_width,
-	display_height,
-	framerate,
-	flip_method);
-    std::cout << "Using pipeline: \n\t" << pipeline << "\n";
-    
-    cap.open(pipeline, cv::CAP_GSTREAMER);
-    
-	if(!cap.isOpened()) {
-		std::cout<<"Failed to open camera."<<std::endl;
-		return (-1);
-    } else {
-		cout << "Arducam is open\n";
-	}
- #endif
 
     //This is here simply to clear the file.
     std::stringstream timeFileName;
@@ -725,17 +745,19 @@ int main(int argc, char *argv[]) {
     for (;;) {
         switch (system_state) {
             case 0: {
-#ifndef ARDUCAM                
-                cap2 >> frame1; // get a new frame from camera
-                cap1 >> frame2;
-#else
-				if (!cap.read(InputFrame)) {
-					std::cout<<"Capture read error"<<std::endl;
-					break;
-				}
-				frame1 = InputFrame(cv::Rect(0,0,InputFrame.cols/2,InputFrame.rows));
-				frame2 = InputFrame(cv::Rect(InputFrame.cols/2,0,InputFrame.cols/2,InputFrame.rows));
-#endif				
+                if (!MainDataStruct.use_arducam)
+                {
+                    cap2 >> frame1; // get a new frame from camera
+                    cap1 >> frame2;
+                }
+                else{
+                    if (!cap1.read(InputFrame)) {
+                        std::cout<<"Capture read error"<<std::endl;
+                        break;
+                    }
+                    frame1 = InputFrame(cv::Rect(0,0,InputFrame.cols/2,InputFrame.rows));
+                    frame2 = InputFrame(cv::Rect(InputFrame.cols/2,0,InputFrame.cols/2,InputFrame.rows));
+                }				
                 /**
                  * If we only do the cross correlation (mapping points to points) we can use
                  * this to trace the accuracy of the points.
@@ -786,20 +808,23 @@ int main(int argc, char *argv[]) {
                 if (start_calibration == true){
                     run_calibration(frame1,frame2,&start_calibration);
                 }
-            }
+                }
                 break;
             case 1:
-#ifndef ARDUCAM            
-                cap2 >> frame1; // get a new frame from camera
-                cap1 >> frame2;
-#else
-				if (!cap.read(InputFrame)) {
-					std::cout<<"Capture read error"<<std::endl;
-					break;
-				}
-				frame1 = InputFrame(cv::Rect(0,0,InputFrame.cols/2,InputFrame.rows));
-				frame2 = InputFrame(cv::Rect(InputFrame.cols/2,0,InputFrame.cols/2,InputFrame.rows));
-#endif
+                if (!MainDataStruct.use_arducam)
+                {
+                    cap2 >> frame1; // get a new frame from camera
+                    cap1 >> frame2;
+                }
+                else
+                {
+                    if (!cap1.read(InputFrame)) {
+                        std::cout<<"Capture read error"<<std::endl;
+                        break;
+                    }
+                    frame1 = InputFrame(cv::Rect(0,0,InputFrame.cols/2,InputFrame.rows));
+                    frame2 = InputFrame(cv::Rect(InputFrame.cols/2,0,InputFrame.cols/2,InputFrame.rows));
+                }
                 DICe::initialize(argc, argv);
                 information_extraction();
                 run_cross_correlation();
@@ -826,7 +851,7 @@ int main(int argc, char *argv[]) {
                 outputImageInformation();
             }
                 break;
-        }
+                }
         state_2_total_time_str.str("");
         state_2_total_time_str << state_2_timer.get()->totalElapsedTime()<<"("<<int(1.0/state_2_timer.get()->totalElapsedTime())<<" Hz)";
 
@@ -886,6 +911,22 @@ int main(int argc, char *argv[]) {
                 serial_port.Write("B0.12\n");
                 cout << "Back" << endl;
             }
+            /**
+             *  Run forwards at a speed
+             */
+            if (c == 'w')
+            {
+                serial_port.Write("W200\n");
+                cout << "Cont. Forward" << endl;
+            }
+            /**
+             *  Run backwards at a speed
+             */
+            if (c == 'x')
+            {
+                serial_port.Write("X200\n");
+                cout << "Cont. Back" << endl;
+            }
             while (serial_port.IsDataAvailable()) {
                 char data_byte;
                 // Specify a timeout value (in milliseconds).
@@ -897,12 +938,15 @@ int main(int argc, char *argv[]) {
         }
     }
 
-#ifndef ARDUCAM
-	cap1.release();
-	cap2.release();
-#else
-	cap.release();
-#endif	
+    if (!MainDataStruct.use_arducam)
+    {
+        cap1.release();
+        cap2.release();
+    }
+    else
+    {
+	    cap1.release();
+    }
     cv::destroyAllWindows() ;
     return return_val;
-}
+    }

@@ -51,7 +51,23 @@ void ScriptRun::ExecuteStep(){
         string current_command = _script_stack->at(CurrentStackPointer);
         cout << current_command << endl;
         char action = current_command.at(0);
-        string data = current_command.substr(2,2);
+        string data;
+        switch (action)
+        {
+        case 'S':
+        case 'F':
+        case 'B':
+        case 'W':
+            data = current_command.substr(2, 2);
+            break;
+        case 'G':
+        case 'V':
+            data = current_command.substr(2, 3);
+            break;
+        default:
+            data = current_command.substr(2, 2);
+            break;
+        }
 
         duration<double, std::milli> time_span = high_resolution_clock::now() - DataSampleTimer;
         if ((DataSampleInterval > 0) && (time_span.count() > DataSampleInterval)){
@@ -65,10 +81,32 @@ void ScriptRun::ExecuteStep(){
             cout << "Sample Period Set" << endl;
             CurrentStackPointer++;
         }
-        if (action == 'F') {
+
+        if (action == 'G') {
+            char command_string[10];
+            sprintf(command_string, "W%03d\n", stoi(data));
+            _serial_port->Write(command_string);
+            LastExecutionPoint = high_resolution_clock::now();
+            cout << "Executing G" << endl;
+            CurrentStackPointer++;
+        }
+
+        if (action == 'V')
+        {
+            char command_string[10];
+            sprintf(command_string, "X%03d\n", stoi(data));
+            _serial_port->Write(command_string);
+            LastExecutionPoint = high_resolution_clock::now();
+            cout << "Executing V" << endl;
+            CurrentStackPointer++;
+        }
+
+        if (action == 'F')
+        {
             _serial_port->Write("F0.12\n");
             IteratorCount++;
-            if (IteratorCount >= stoi(data)) {
+            if (IteratorCount >= stoi(data))
+            {
                 LastExecutionPoint = high_resolution_clock::now();
                 cout << "Executing F" << endl;
                 CurrentStackPointer++;
