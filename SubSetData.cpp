@@ -33,7 +33,7 @@ void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema){
             extractedRoi = channels.at(2)(r);
             extractedRoi += char(((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS))*-5);
             cv::merge(channels, *passedFrame);
-            rectangle(*passedFrame, r, Scalar(255, 0, 0), 1, 8, 0);
+            rectangle(*passedFrame, r, Scalar(255, 0, 0), 3, 8, 0);
         }
     }
 }

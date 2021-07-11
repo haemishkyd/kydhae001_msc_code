@@ -133,7 +133,7 @@ void ScriptRun::ExecuteStep(){
         }
 
         if (current_command == "DRAW") {
-            plot_obj.draw(_x_plot,_y_plot);
+            plot_obj.draw(_x_plot, _y_plot);
             plot_obj.show();
             cout << "Drawing Result" << endl;
             CurrentStackPointer++;

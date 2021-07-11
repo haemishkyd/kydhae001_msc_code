@@ -575,12 +575,12 @@ void outputImageInformation(){
     setMouseCallback("Real Time DIC - Haemish Kyd",dataMouseCallBack);
 }
 
-void *WriteImageFiles(void *threadid) {
+void *GetVideo(void *threadid) {
     long tid;
     Mat InputFrame;
     tid = (long)threadid;
-    while (MainDataStruct.WriteThreadRunning) {
-        ReadComplete.wait(tid);
+    while (MainDataStruct.WriteThreadRunning)
+    {
         if (!MainDataStruct.use_arducam)
         {
             cap2 >> frame1; // get a new frame from camera
@@ -596,8 +596,16 @@ void *WriteImageFiles(void *threadid) {
             frame1 = InputFrame(cv::Rect(0, 0, InputFrame.cols / 2, InputFrame.rows));
             frame2 = InputFrame(cv::Rect(InputFrame.cols / 2, 0, InputFrame.cols / 2, InputFrame.rows));
         }
-        imwrite("Img_0001_0.jpeg", frame1);
-        imwrite("Img_0001_1.jpeg", frame2);
+    }
+}
+
+void *WriteImageFiles(void *threadid) {
+    long tid;
+    tid = (long)threadid;
+    while (MainDataStruct.WriteThreadRunning) {        
+        ReadComplete.wait(tid);
+        imwrite("./rdisk_images/Img_0001_0.jpeg", frame1);
+        imwrite("./rdisk_images/Img_0001_1.jpeg", frame2);
         WriteComplete.notify(tid);
     }
     pthread_exit(NULL);
@@ -838,6 +846,7 @@ int main(int argc, char *argv[]) {
                 }
                 else {
                     (void) pthread_create(&threads[0], NULL, WriteImageFiles, (void *) 0);
+                    (void)pthread_create(&threads[0], NULL, GetVideo, (void *)0);
                     ReadComplete.notify(0);
                     system_state = 2;
                 }
@@ -881,8 +890,8 @@ int main(int argc, char *argv[]) {
          * Initiate the 3D DIC
          */
         if (c == 'i') {
-            imwrite("Img_0000_0.jpeg", frame1);
-            imwrite("Img_0000_1.jpeg", frame2);
+            imwrite("./rdisk_images/Img_0000_0.jpeg", frame1);
+            imwrite("./rdisk_images/Img_0000_1.jpeg", frame2);
             system_state = 1;
         }
         /**
