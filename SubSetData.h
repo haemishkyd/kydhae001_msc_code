@@ -12,6 +12,16 @@ public:
     int Y_Coord;
     int Subset_Size;
 
+    int X_Start_Coord;
+    int Y_Start_Coord;
+    int X_End_Coord;
+    int Y_End_Coord;
+
+    int X_Start_Draw_Coord;
+    int Y_Start_Draw_Coord;
+    int X_End_Draw_Coord;
+    int Y_End_Draw_Coord;
+
     double displacement_x;
     double displacement_y;
     double displacement_z;
@@ -22,7 +32,9 @@ public:
         Subset_Size = s;
     }
 
-
+    void SetStartCorner(int x, int y);
+    void SetEndCorner(int x, int y);
+    void GenerateSubsetFile();
 };
 
 list<SubSetData> *getSubSets();

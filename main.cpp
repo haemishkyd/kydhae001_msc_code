@@ -84,7 +84,7 @@ void write_timing_metrics();
 
 void read_script(string script_name);
 
-void dataMouseCallBack(int event, int x, int y, int flags, void* userdata);
+void subsetMouseCallBack(int event, int x, int y, int flags, void* userdata);
 
 void projectionMouseCallBack(int event, int x, int y, int flags, void* userdata);
 
@@ -124,6 +124,7 @@ std::vector<std::string> image_files;
 std::vector<std::string> stereo_image_files;
 Teuchos::RCP<std::ostream> outStream;
 MainDataStructType MainDataStruct;
+SubSetData *subSetGenerator;
 /**
  * Start a whole bunch of metrics to see how long stuff takes!!
  */
@@ -136,8 +137,7 @@ Teuchos::RCP<Teuchos::Time> write_time = Teuchos::TimeMonitor::getNewCounter("Wr
 stringstream cross_and_trian_time_str;
 stringstream state_2_total_time_str;
 
-Rect z_button, x_button, y_button;
-bool x_button_clicked, y_button_clicked, z_button_clicked;
+bool StartCoord = false;
 
 Mat frame1, frame2, data(500, 1200, CV_8UC3, Scalar(0, 0, 0));;
 
@@ -423,27 +423,41 @@ void main_stereo_3d_correlation() {
     DICe::finalize();
 }
 
-void dataMouseCallBack(int event, int x, int y, int flags, void* userdata){
+void subsetMouseCallBack(int event, int x, int y, int flags, void* userdata){
+    int calc_x;
+    int calc_y;
+    if (x > 640)
+    {
+        calc_x = x - 640;
+    }
+    else
+    {
+        calc_x = x;
+    }
+    calc_y = y;
+    calc_x = (int)((double)calc_x * (1024.0 / 640.0));
+    calc_y = (int)((double)calc_y * (1536.0 / 480.0));
+
     if (event == EVENT_LBUTTONDOWN)
     {
-        if (x_button.contains(Point(x, y)))
-        {
-            x_button_clicked = true;
-            y_button_clicked = false;
-            z_button_clicked = false;
-        }
-        if (y_button.contains(Point(x, y)))
-        {
-            x_button_clicked = false;
-            y_button_clicked = true;
-            z_button_clicked = false;
-        }
-        if (z_button.contains(Point(x, y)))
-        {
-            x_button_clicked = false;
-            y_button_clicked = false;
-            z_button_clicked = true;
-        }
+        subSetGenerator->SetStartCorner(calc_x, calc_y);
+        subSetGenerator->X_Start_Draw_Coord = x;
+        subSetGenerator->Y_Start_Draw_Coord = y;
+        StartCoord = true;
+    }
+    if (event == EVENT_LBUTTONUP)
+    {
+        subSetGenerator->SetEndCorner(calc_x, calc_y);
+        subSetGenerator->GenerateSubsetFile();
+        StartCoord = false;
+                cout
+            << "Start: " << subSetGenerator->X_Start_Coord << "," << subSetGenerator->Y_Start_Coord << endl;
+        cout << "End: " << subSetGenerator->X_End_Coord << "," << subSetGenerator->Y_End_Coord << endl;
+    }
+    if (event == EVENT_MOUSEMOVE){
+        subSetGenerator->X_End_Draw_Coord = x;
+        subSetGenerator->Y_End_Draw_Coord = y;
+        subSetGenerator->SetEndCorner(calc_x, calc_y);
     }
 }
 
@@ -517,8 +531,7 @@ void outputImageInformation(){
     putText(data, "Subset 2", Point(400, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
     putText(data, "Subset 3", Point(800, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
 
-    for (int subset_idx = 0; subset_idx < schema->local_num_subsets(); subset_idx++) {
-
+    for (int subset_idx = 0; subset_idx < 3; subset_idx++) {
         stringstream sx;
         stringstream sy;
         stringstream sz;
@@ -557,22 +570,7 @@ void outputImageInformation(){
 
     vconcat(DisplayFrame,data,DisplayFrame);
 
-    x_button = Rect(0,960,400, 20);
-    y_button = Rect(400,960,400, 20);
-    z_button = Rect(800,960,400, 20);
-    Scalar rectangle_color;
-    rectangle_color = x_button_clicked == true?Scalar(100,127,255):Scalar(0,255,0);
-    rectangle(DisplayFrame,x_button,rectangle_color,1,8,0);
-    rectangle_color = y_button_clicked == true?Scalar(100,127,255):Scalar(0,255,0);
-    rectangle(DisplayFrame,y_button,rectangle_color,1,8,0);
-    rectangle_color = z_button_clicked == true?Scalar(100,127,255):Scalar(0,255,0);
-    rectangle(DisplayFrame,z_button,rectangle_color,1,8,0);
-
-    putText(DisplayFrame, "Show X", Point(150, 975), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,255,0));
-    putText(DisplayFrame, "Show Y", Point(550, 975), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,255,0));
-    putText(DisplayFrame, "Show Z", Point(950, 975), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0,255,0));
-    imshow("Real Time DIC - Haemish Kyd",DisplayFrame);
-    setMouseCallback("Real Time DIC - Haemish Kyd",dataMouseCallBack);
+    imshow("Real Time DIC - Haemish Kyd",DisplayFrame);    
 }
 
 void *GetVideo(void *threadid) {
@@ -635,7 +633,8 @@ int main(int argc, char *argv[]) {
     int framerate = 13 ;
     int flip_method = 2 ;
     Mat InputFrame;
-    
+
+    subSetGenerator = new SubSetData(0,0,0);
     MainDataStruct.use_arducam = false;
     if (argc == 3){
         if (strcmp(argv[1], "--arducam") == 0)
@@ -680,9 +679,6 @@ int main(int argc, char *argv[]) {
         serial_port.SetNumOfStopBits(SerialPort::STOP_BITS_1);
     }
 
-    x_button_clicked = false;
-    y_button_clicked = false;
-    z_button_clicked = false;
     MainDataStruct.WriteThreadRunning = true;
 
     if (!MainDataStruct.use_arducam)
@@ -790,6 +786,7 @@ int main(int argc, char *argv[]) {
                     circle(frame2, Point(MainDataStruct.User_Right_X, MainDataStruct.User_Right_Y), 3,
                            colour_choice, 2);
                 }
+                
                 hconcat(frame1, frame2, OutputFrame);
                 /**
                  * If we only do the cross correlation (mapping points to points) we can
@@ -808,9 +805,16 @@ int main(int argc, char *argv[]) {
                     line(OutputFrame, Point(MainDataStruct.User_Left_X, MainDataStruct.User_Left_Y),
                          Point(MainDataStruct.User_Right_X + 640, MainDataStruct.User_Right_Y),
                          colour_choice);
-                }
-
+                }                
                 resize(OutputFrame,DisplayFrame,Size(1280,480));
+                if (StartCoord == true)
+                {
+                    Rect r = Rect(subSetGenerator->X_Start_Draw_Coord,
+                                  subSetGenerator->Y_Start_Draw_Coord,
+                                  subSetGenerator->X_End_Draw_Coord - subSetGenerator->X_Start_Draw_Coord,
+                                  subSetGenerator->Y_End_Draw_Coord - subSetGenerator->Y_Start_Draw_Coord);
+                    rectangle(DisplayFrame, r, Scalar(255, 0, 0), 1, 8, 0);
+                }
                 imshow("Real Time DIC - Haemish Kyd", DisplayFrame);
 
                 if (start_calibration == true){
@@ -833,8 +837,11 @@ int main(int argc, char *argv[]) {
                     frame1 = InputFrame(cv::Rect(0,0,InputFrame.cols/2,InputFrame.rows));
                     frame2 = InputFrame(cv::Rect(InputFrame.cols/2,0,InputFrame.cols/2,InputFrame.rows));
                 }
+                std::cout << "DICE initialize." << std::endl;
                 DICe::initialize(argc, argv);
+                std::cout << "DICE information extraction." << std::endl;
                 information_extraction();
+                std::cout << "DICE run initial cross correlation." << std::endl;
                 run_cross_correlation();
 
                 cross_and_trian_time_str.str("");
@@ -849,6 +856,7 @@ int main(int argc, char *argv[]) {
                     (void)pthread_create(&threads[0], NULL, GetVideo, (void *)0);
                     ReadComplete.notify(0);
                     system_state = 2;
+                    std::cout << "DICE initialisation complete." << std::endl;
                 }
                 break;
             case 2: {
@@ -904,6 +912,12 @@ int main(int argc, char *argv[]) {
             if (MainDataStruct.myScript->_script_loaded){
                 MainDataStruct.myScript->ExecuteStep();
             }
+        }
+        /**
+         * Define the region of interest
+         */
+        if (c == 's'){
+            setMouseCallback("Real Time DIC - Haemish Kyd", subsetMouseCallBack);
         }
         if (serial_port.IsOpen()) {
             /**
