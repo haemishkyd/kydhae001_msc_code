@@ -1,1 +1,1 @@
-int run_calibration(cv::Mat frame1, cv::Mat frame2, int *start_calibration);
+int run_calibration(cv::Mat frame1, cv::Mat frame2, int *step_calibration, int *start_calibration);

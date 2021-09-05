@@ -46,7 +46,7 @@
 #include <DICe_ImageIO.h>
 #include <DICe_Schema.h>
 #include <DICe_Triangulation.h>
-
+#include <DICe_OpenCVServerUtils.h>
 
 #include <fstream>
 
@@ -139,7 +139,8 @@ stringstream state_2_total_time_str;
 
 bool StartCoord = false;
 
-Mat frame1, frame2, data(500, 1200, CV_8UC3, Scalar(0, 0, 0));;
+Mat frame1, frame2, data(500, 1200, CV_8UC3, Scalar(0, 0, 0));
+Mat cal_frame1, cal_frame2;
 
 Semaphore WriteComplete(0);
 Semaphore ReadComplete(0);
@@ -619,6 +620,10 @@ string gstreamer_pipeline (int capture_width, int capture_height, int display_wi
 int main(int argc, char *argv[]) {
     int return_val;
     int start_calibration = false;
+    int capture_image_for_calib = false;
+    int corner_display_counter = 0;
+    std::vector<Point2f> corners1;
+    std::vector<Point2f> corners2;
     float Brightness;
     int system_state = 0;
     bool only_cc = false;
@@ -786,41 +791,111 @@ int main(int argc, char *argv[]) {
                     circle(frame2, Point(MainDataStruct.User_Right_X, MainDataStruct.User_Right_Y), 3,
                            colour_choice, 2);
                 }
-                
-                hconcat(frame1, frame2, OutputFrame);
+
+                if (start_calibration != true)
+                {
+                    hconcat(frame1, frame2, OutputFrame);
+                }
+                else
+                {
+                    cal_frame1 = frame1.clone();
+                    cal_frame2 = frame2.clone();
+                    string cal_text = "Calibrating...." + to_string(corner_display_counter);
+                    cv::putText(cal_frame1, cal_text, Point(10, 50),
+                                FONT_HERSHEY_DUPLEX, 2.0, Scalar(255, 255, 255), 1, cv::LINE_AA);
+                    cv::putText(cal_frame2, cal_text, Point(10, 50),
+                                FONT_HERSHEY_DUPLEX, 2.0, Scalar(255, 255, 255), 1, cv::LINE_AA);
+
+                    if (corner_display_counter >= 100)
+                    {
+                        Teuchos::RCP<Teuchos::ParameterList> params = Teuchos::rcp(new Teuchos::ParameterList());
+                        Teuchos::Ptr<Teuchos::ParameterList> params_ptr(params.get());
+                        
+                        try
+                        {
+                            Teuchos::updateParametersFromXmlFile("cal_input_checker_board.xml", params_ptr);
+                        }
+                        catch (std::exception &e)
+                        {
+                            std::cout << e.what() << std::endl;
+                            TEUCHOS_TEST_FOR_EXCEPTION(true, std::runtime_error, "invalid xml cal input file");
+                        }
+                        Mat sing_chan_cal_frame1 = cal_frame1.clone();
+                        Mat sing_chan_cal_frame2 = cal_frame2.clone();
+                        cv::cvtColor(cal_frame1, sing_chan_cal_frame1, cv::COLOR_BGR2GRAY);
+                        cv::cvtColor(cal_frame2, sing_chan_cal_frame2, cv::COLOR_BGR2GRAY);
+
+                        Size board_size; //used by openCV
+                        board_size.width = params->get<int_t>(DICe::num_cal_fiducials_x);
+                        board_size.height = params->get<int_t>(DICe::num_cal_fiducials_y);
+                        std::cout << "Checking calibration image." << std::endl;
+                        const bool found1 = findChessboardCorners(sing_chan_cal_frame1, board_size, corners1, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_NORMALIZE_IMAGE);
+                        if (found1)
+                        {
+                            std::cout << "Frame 1 -> opencv_checkerboard_targets(): found " << corners1.size() << " checkerboard intersections" << std::endl;
+                        }
+                        const bool found2 = findChessboardCorners(sing_chan_cal_frame2, board_size, corners2, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_NORMALIZE_IMAGE);
+                        if (found2)
+                        {
+                            std::cout << "Frame 2 -> opencv_checkerboard_targets(): found " << corners2.size() << " checkerboard intersections" << std::endl;
+                        }
+                        if ((corners1.size() == board_size.width * board_size.height) && (corners2.size() == board_size.width * board_size.height)){
+                            std::cout << "All points found." << std::endl;
+                            capture_image_for_calib = true;
+                        }
+                        corner_display_counter = 0;
+                        // opencv_checkerboard_targets(sing_chan_cal_frame1, *params, corners1);
+                        // opencv_checkerboard_targets(sing_chan_cal_frame2, *params, corners2);
+                    }
+                    for (int_t i_pnt = 0; i_pnt < corners1.size(); i_pnt++)
+                    {
+                        circle(cal_frame1, corners1[i_pnt], 10, Scalar(0, 255, 0));
+                    } // end corner loop x
+                    for (int_t i_pnt = 0; i_pnt < corners2.size(); i_pnt++)
+                    {
+                        circle(cal_frame2, corners2[i_pnt], 10, Scalar(0, 255, 0));
+                    } // end corner loop x
+                    
+                    corner_display_counter++;
+                    hconcat(cal_frame1, cal_frame2, OutputFrame);
+                }
                 /**
                  * If we only do the cross correlation (mapping points to points) we can
                  * use this to trace the accuracy of the points.
                  */
-                if (!MainDataStruct.Left_X.empty() || !MainDataStruct.Left_Y.empty()) {
-                    for (int num_it = 0; num_it < MainDataStruct.Left_X.size(); num_it++) {
-                        Scalar colour_choice = Scalar(255, 0 , 0);
+                if (!MainDataStruct.Left_X.empty() || !MainDataStruct.Left_Y.empty())
+                {
+                    for (int num_it = 0; num_it < MainDataStruct.Left_X.size(); num_it++)
+                    {
+                        Scalar colour_choice = Scalar(255, 0, 0);
                         line(OutputFrame, Point(MainDataStruct.Left_X.at(num_it), MainDataStruct.Left_Y.at(num_it)),
-                             Point(MainDataStruct.Right_X.at(num_it) + 640, MainDataStruct.Right_Y.at(num_it)),
-                             colour_choice);
+                                Point(MainDataStruct.Right_X.at(num_it) + 640, MainDataStruct.Right_Y.at(num_it)),
+                                colour_choice);
                     }
                 }
-                if ((MainDataStruct.User_Right_X != 0) || (MainDataStruct.User_Right_Y != 0)){
-                    Scalar colour_choice = Scalar(0, 255 , 0);
+                if ((MainDataStruct.User_Right_X != 0) || (MainDataStruct.User_Right_Y != 0))
+                {
+                    Scalar colour_choice = Scalar(0, 255, 0);
                     line(OutputFrame, Point(MainDataStruct.User_Left_X, MainDataStruct.User_Left_Y),
-                         Point(MainDataStruct.User_Right_X + 640, MainDataStruct.User_Right_Y),
-                         colour_choice);
-                }                
-                resize(OutputFrame,DisplayFrame,Size(1280,480));
+                            Point(MainDataStruct.User_Right_X + 640, MainDataStruct.User_Right_Y),
+                            colour_choice);
+                }
+                resize(OutputFrame, DisplayFrame, Size(1280, 480));
                 if (StartCoord == true)
                 {
                     Rect r = Rect(subSetGenerator->X_Start_Draw_Coord,
-                                  subSetGenerator->Y_Start_Draw_Coord,
-                                  subSetGenerator->X_End_Draw_Coord - subSetGenerator->X_Start_Draw_Coord,
-                                  subSetGenerator->Y_End_Draw_Coord - subSetGenerator->Y_Start_Draw_Coord);
+                                    subSetGenerator->Y_Start_Draw_Coord,
+                                    subSetGenerator->X_End_Draw_Coord - subSetGenerator->X_Start_Draw_Coord,
+                                    subSetGenerator->Y_End_Draw_Coord - subSetGenerator->Y_Start_Draw_Coord);
                     rectangle(DisplayFrame, r, Scalar(255, 0, 0), 1, 8, 0);
                 }
                 imshow("Real Time DIC - Haemish Kyd", DisplayFrame);
 
-                if (start_calibration == true){
-                    run_calibration(frame1,frame2,&start_calibration);
+                if (start_calibration == true)
+                {
+                    run_calibration(frame1, frame2, &capture_image_for_calib, &start_calibration);
                 }
-                }
+            }
                 break;
             case 1:
                 if (!MainDataStruct.use_arducam)
@@ -884,7 +959,13 @@ int main(int argc, char *argv[]) {
          * Run the calibration
          */
         if (c == 'c'){
-            start_calibration = true;
+            if (start_calibration == true){
+                capture_image_for_calib = true;
+            }
+            else
+            {
+                start_calibration = true;
+            }
         }
         /**
          * Quit the program completely
