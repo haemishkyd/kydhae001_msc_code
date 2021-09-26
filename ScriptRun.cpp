@@ -57,12 +57,13 @@ void ScriptRun::ExecuteStep(){
         case 'S':
         case 'F':
         case 'B':
-        case 'W':
+        case 'W':        
             data = current_command.substr(2, 2);
             break;
         case 'G':
         case 'V':
-            data = current_command.substr(2, 3);
+        case 'T':
+            data = current_command.substr(2, 4);
             break;
         default:
             data = current_command.substr(2, 2);
@@ -84,7 +85,7 @@ void ScriptRun::ExecuteStep(){
 
         if (action == 'G') {
             char command_string[10];
-            sprintf(command_string, "W%03d\n", stoi(data));
+            sprintf(command_string, "W%04d\n", stoi(data));
             _serial_port->Write(command_string);
             LastExecutionPoint = high_resolution_clock::now();
             cout << "Executing G" << endl;
@@ -94,10 +95,20 @@ void ScriptRun::ExecuteStep(){
         if (action == 'V')
         {
             char command_string[10];
-            sprintf(command_string, "X%03d\n", stoi(data));
+            sprintf(command_string, "X%04d\n", stoi(data));
             _serial_port->Write(command_string);
             LastExecutionPoint = high_resolution_clock::now();
             cout << "Executing V" << endl;
+            CurrentStackPointer++;
+        }
+
+        if (action == 'T')
+        {
+            char command_string[10];
+            sprintf(command_string, "T%04d\n", stoi(data));
+            _serial_port->Write(command_string);
+            LastExecutionPoint = high_resolution_clock::now();
+            cout << "Executing T" << endl;
             CurrentStackPointer++;
         }
 

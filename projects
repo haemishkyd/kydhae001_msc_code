@@ -27,7 +27,7 @@ long_line_behaviour=1
 long_line_column=72
 
 [files]
-current_page=9
+current_page=10
 FILE_NAME_0=32763;C++;0;EUTF-8;1;1;0;%2Fhome%2Fhaemish%2FMasters%2FCodeRepo%2Fmasters_v3%2Fmain.cpp;0;4
 FILE_NAME_1=10700;C++;0;EUTF-8;1;1;0;%2Fhome%2Fhaemish%2FMasters%2FCodeRepo%2Fmasters_v3%2Fcalibrate.cpp;0;4
 FILE_NAME_2=0;C++;0;EUTF-8;1;1;0;%2Fhome%2Fhaemish%2FMasters%2FCodeRepo%2Fmasters_v3%2Fcalibrate.h;0;4
@@ -38,6 +38,7 @@ FILE_NAME_6=0;C++;0;EUTF-8;1;1;0;%2Fhome%2Fhaemish%2FMasters%2FCodeRepo%2Fmaster
 FILE_NAME_7=0;C++;0;EUTF-8;1;1;0;%2Fhome%2Fhaemish%2FMasters%2FCodeRepo%2Fmasters_v3%2FSubSetData.cpp;0;4
 FILE_NAME_8=0;C++;0;EUTF-8;1;1;0;%2Fhome%2Fhaemish%2FMasters%2FCodeRepo%2Fmasters_v3%2FSubSetData.h;0;4
 FILE_NAME_9=3093;C++;0;EUTF-8;1;1;0;%2Fhome%2Fhaemish%2FMasters%2FCodeRepo%2Fopencv-4.2.0%2Fmodules%2Fimgproc%2Fsrc%2Fcornersubpix.cpp;0;4
+FILE_NAME_10=485;Sh;0;EUTF-8;1;1;0;%2Fhome%2Fhaemish%2FMasters%2FCodeRepo%2Fmasters_v3%2Fbuild%2Fcmake-debug-build%2Fcopy_results.sh;0;4
 
 [VTE]
 last_dir=/home/haemish
