@@ -38,5 +38,4 @@ public:
 };
 
 list<SubSetData> *getSubSets();
-void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema);
-
+void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema, int which_axis_to_draw);

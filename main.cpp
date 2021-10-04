@@ -113,6 +113,7 @@ typedef struct {
     vector<string> script_stack;
     ScriptRun *myScript;
     bool use_arducam;
+    int WhichAxisToDraw; //0=Z, 1=Y, 2=X
 } MainDataStructType;
 
 Teuchos::RCP<DICe::Schema> schema;
@@ -144,6 +145,8 @@ Mat cal_frame1, cal_frame2;
 
 Semaphore WriteComplete(0);
 Semaphore ReadComplete(0);
+Semaphore VideoRetrieveComplete(0);
+Semaphore VideoDisplayComplete(0);
 
 VideoCapture cap2; // open the default camera
 VideoCapture cap1; // open the default camera
@@ -518,11 +521,11 @@ void read_script(string script_name){
 }
 
 void outputImageInformation(){
-
-    drawSubsets(&frame1,&schema);
-
     Mat OutputFrame;
     Mat DisplayFrame;
+
+    drawSubsets(&frame1, &schema, MainDataStruct.WhichAxisToDraw);
+
     hconcat(frame1,frame2,OutputFrame);
     resize(OutputFrame,DisplayFrame,Size(1280,480));
     data.release();
@@ -571,7 +574,7 @@ void outputImageInformation(){
 
     vconcat(DisplayFrame,data,DisplayFrame);
 
-    imshow("Real Time DIC - Haemish Kyd",DisplayFrame);    
+    imshow("Real Time DIC - Haemish Kyd",DisplayFrame);
 }
 
 void *GetVideo(void *threadid) {
@@ -640,6 +643,7 @@ int main(int argc, char *argv[]) {
     Mat InputFrame;
 
     subSetGenerator = new SubSetData(0,0,0);
+    MainDataStruct.WhichAxisToDraw = 0; //Set it to Z
     MainDataStruct.use_arducam = false;
     if (argc == 3){
         if (strcmp(argv[1], "--arducam") == 0)
@@ -1000,6 +1004,25 @@ int main(int argc, char *argv[]) {
         if (c == 's'){
             setMouseCallback("Real Time DIC - Haemish Kyd", subsetMouseCallBack);
         }
+
+        /**
+         * Plot the X parameter
+         */
+        if (c == 'x')
+        {
+            MainDataStruct.WhichAxisToDraw = 2;
+            cout << "X Axis Chosen" << endl;
+        }
+        if (c == 'y')
+        {
+            MainDataStruct.WhichAxisToDraw = 1;
+            cout << "Y Axis Chosen" << endl;
+        }
+        if (c == 'z')
+        {
+            MainDataStruct.WhichAxisToDraw = 0;
+            cout << "Z Axis Chosen" << endl;
+        }
         if (serial_port.IsOpen()) {
             /**
              * Run the target forward a millimetre
@@ -1053,4 +1076,4 @@ int main(int argc, char *argv[]) {
     }
     cv::destroyAllWindows() ;
     return return_val;
-    }
+}

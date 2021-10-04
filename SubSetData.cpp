@@ -21,19 +21,36 @@ list<SubSetData> *getSubSets(){
     return &subSets;
 }
 
-void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema){
-    if (subSets.size() > 0) {
+void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema, int which_axis_to_draw){
+    char disp_colour;
+    if (subSets.size() > 0)
+    {
         for (SubSetData &theSet : (subSets)) {
             Rect r = Rect(theSet.X_Coord - (theSet.Subset_Size / 2),
                           theSet.Y_Coord - (theSet.Subset_Size / 2),
                           theSet.Subset_Size, theSet.Subset_Size);
-            std::vector<Mat> channels(3);
-            cv:split(*passedFrame,channels);
-            Mat extractedRoi;
-            extractedRoi = channels.at(2)(r);
-            extractedRoi += char(((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS))*-5);
-            cv::merge(channels, *passedFrame);
-            rectangle(*passedFrame, r, Scalar(255, 255, 0), 1, 8, 0);
+            // std::vector<Mat> channels(3);
+            // cv:split(*passedFrame,channels);
+            // Mat extractedRoi;
+            // extractedRoi = channels.at(2)(r);
+            // extractedRoi += char(((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS))*-5);
+            // cv::merge(channels, *passedFrame);
+            switch (which_axis_to_draw)
+            {
+            case 0:
+                disp_colour = char(((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS)) * 10);
+                break;
+            case 1:
+                disp_colour = char(((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Y_FS)) * 10);
+                break;
+            case 2:
+                disp_colour = char(((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_X_FS)) * 10);
+                break;
+            default:
+                disp_colour = char(((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS)) * 10);
+                break;
+            }
+            rectangle(*passedFrame, r, Scalar(255 - disp_colour, 255 - disp_colour, 255), 1, 8, 0);
         }
     }
 }
