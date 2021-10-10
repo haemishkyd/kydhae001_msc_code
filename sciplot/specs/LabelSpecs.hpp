@@ -25,24 +25,12 @@
 
 #pragma once
 
-// We check if windows.h. is already included, as this might break compilation. See: https://sciplot.github.io/known_issues/
-#ifdef _WINDOWS_
-#ifdef _MSC_VER
-#pragma message(__FILE__ "(): warning: You might run into compiler errors if windows.h is included before sciplot.hpp! See: https://sciplot.github.io/known_issues/")
-#else
-#warning You might run into compiler errors if windows.h is included before sciplot.hpp! See: https://sciplot.github.io/known_issues/
-#endif // _MSC_VER
-#endif // _WINDOWS_
-
 // sciplot includes
-#include <sciplot/Constants.hpp>
-#include <sciplot/Default.hpp>
-#include <sciplot/Enums.hpp>
-#include <sciplot/Figure.hpp>
-#include <sciplot/Palettes.hpp>
-#include <sciplot/Plot.hpp>
-#include <sciplot/Plot3D.hpp>
-#include <sciplot/PlotBase.hpp>
-#include <sciplot/StringOrDouble.hpp>
+#include <sciplot/specs/Specs.hpp>
 #include <sciplot/Utils.hpp>
-#include <sciplot/Vec.hpp>
+
+namespace sciplot {
+
+// TODO: Implement LabelSpecs
+
+} // namespace sciplot

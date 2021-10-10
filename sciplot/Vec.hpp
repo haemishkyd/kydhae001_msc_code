@@ -25,24 +25,40 @@
 
 #pragma once
 
-// We check if windows.h. is already included, as this might break compilation. See: https://sciplot.github.io/known_issues/
-#ifdef _WINDOWS_
-#ifdef _MSC_VER
-#pragma message(__FILE__ "(): warning: You might run into compiler errors if windows.h is included before sciplot.hpp! See: https://sciplot.github.io/known_issues/")
-#else
-#warning You might run into compiler errors if windows.h is included before sciplot.hpp! See: https://sciplot.github.io/known_issues/
-#endif // _MSC_VER
-#endif // _WINDOWS_
+// C++ includes
+#include <algorithm>
+#include <functional>
+#include <string>
+#include <valarray>
+#include <vector>
 
-// sciplot includes
-#include <sciplot/Constants.hpp>
-#include <sciplot/Default.hpp>
-#include <sciplot/Enums.hpp>
-#include <sciplot/Figure.hpp>
-#include <sciplot/Palettes.hpp>
-#include <sciplot/Plot.hpp>
-#include <sciplot/Plot3D.hpp>
-#include <sciplot/PlotBase.hpp>
-#include <sciplot/StringOrDouble.hpp>
-#include <sciplot/Utils.hpp>
-#include <sciplot/Vec.hpp>
+namespace sciplot {
+
+/// A convenient type alias for std::valarray<double>
+using Vec = std::valarray<double>;
+
+/// A convenient type alias for std::vector<std::string>
+using Strings = std::vector<std::string>;
+
+/// Return an array with uniform increments from a given initial value to a final one
+template <typename T0, typename T1, typename U = double>
+auto linspace(T0 x0, T1 x1, std::size_t numintervals) -> std::valarray<U>
+{
+    std::valarray<U> result(numintervals + 1);
+    for(std::size_t i = 0; i <= numintervals; ++i)
+        result[i] = x0 + i * (x1 - x0) / static_cast<U>(numintervals);
+    return result;
+}
+
+/// Return an array with unit increment from a given initial value to a final one
+template <typename U = double>
+auto range(int x0, int x1) -> Vec
+{
+    const auto incr = (x1 > x0) ? +1 : -1;
+    std::valarray<U> result(x1 - x0 + 1);
+    for(std::size_t i = 0; i < result.size(); ++i)
+        result[i] = x0 + i * incr;
+    return result;
+}
+
+} // namespace sciplot

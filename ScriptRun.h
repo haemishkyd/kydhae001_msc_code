@@ -15,7 +15,7 @@ public:
     SerialPort *_serial_port;
     Teuchos::RCP<DICe::Schema> *_schema;
     std::vector<float> _x_plot;
-    std::vector<float> _y_plot;
+    std::vector<vector<float>> _y_plot;
     bool _script_loaded;
     int IteratorCount;
     int X_Axis_Counter;
@@ -23,9 +23,12 @@ public:
     high_resolution_clock::time_point DataSampleTimer;
     int DataSampleInterval;
     int CurrentStackPointer;
+    int NumberOfSubsets;
+    int WhichAxisToDraw;
 
     ScriptRun(vector<string> *p_stack, SerialPort *controlPort, Teuchos::RCP<DICe::Schema> *passedSchema);
     void ExecuteStep();
+    void InitStep();
 
 private:
 };

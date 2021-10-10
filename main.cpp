@@ -52,7 +52,9 @@
 
 #include <Teuchos_TimeMonitor.hpp>
 #include <Teuchos_XMLParameterListHelpers.hpp>
+#define throw(...)
 #include <SerialPort.h>
+#undef throw
 
 #include "opencv2/opencv.hpp"
 
@@ -62,7 +64,7 @@
 #include "calibrate.h"
 
 #if DICE_MPI
-#  include <mpi.h>
+#include <mpi.h>
 #endif
 
 using namespace DICe::field_enums;
@@ -84,15 +86,16 @@ void write_timing_metrics();
 
 void read_script(string script_name);
 
-void subsetMouseCallBack(int event, int x, int y, int flags, void* userdata);
+void subsetMouseCallBack(int event, int x, int y, int flags, void *userdata);
 
-void projectionMouseCallBack(int event, int x, int y, int flags, void* userdata);
+void projectionMouseCallBack(int event, int x, int y, int flags, void *userdata);
 
 void outputImageInformation();
 
-string gstreamer_pipeline (int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method);
+string gstreamer_pipeline(int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method);
 
-typedef struct {
+typedef struct
+{
     int num_frames;
     std::string file_prefix;
     std::string stereo_file_prefix;
@@ -140,7 +143,7 @@ stringstream state_2_total_time_str;
 
 bool StartCoord = false;
 
-Mat frame1, frame2, data(500, 1200, CV_8UC3, Scalar(0, 0, 0));
+Mat frame1, frame2, dataframe(500, 1200, CV_8UC3, Scalar(0, 0, 0));
 Mat cal_frame1, cal_frame2;
 
 Semaphore WriteComplete(0);
@@ -151,8 +154,8 @@ Semaphore VideoDisplayComplete(0);
 VideoCapture cap2; // open the default camera
 VideoCapture cap1; // open the default camera
 
-
-bool read_input_data_files() {
+bool read_input_data_files()
+{
     /**
      * Get all of the input parameters from the input files.
      */
@@ -163,31 +166,38 @@ bool read_input_data_files() {
 
     *outStream << "Input Parameters: " << std::endl;
     input_params->print(*outStream);
-    *outStream << "\n--- Input read successfully ---\n" << std::endl;
+    *outStream << "\n--- Input read successfully ---\n"
+               << std::endl;
 
     /**
      * Get all of the correlation parameters from the input files.
      */
     bool is_error_est_run = false;
-    if (input_params->isParameter(DICe::correlation_parameters_file)) {
+    if (input_params->isParameter(DICe::correlation_parameters_file))
+    {
         const std::string paramsFileName = input_params->get<std::string>(DICe::correlation_parameters_file);
         correlation_params = DICe::read_correlation_params(paramsFileName);
         *outStream << "User specified correlation Parameters: " << std::endl;
         correlation_params->print(*outStream);
         is_error_est_run = correlation_params->get<bool>(DICe::estimate_resolution_error, false);
-        if (is_error_est_run) {
+        if (is_error_est_run)
+        {
             // force the computing of the image laplacian for the reference image:
             correlation_params->set(DICe::compute_laplacian_image, true);
         }
-        *outStream << "\n--- Correlation parameters read successfully ---\n" << std::endl;
-    } else {
+        *outStream << "\n--- Correlation parameters read successfully ---\n"
+                   << std::endl;
+    }
+    else
+    {
         *outStream << "Correlation parameters not specified by user" << std::endl;
     }
 
     return is_error_est_run;
 }
 
-void run_cross_correlation() {
+void run_cross_correlation()
+{
     /* We know this is a stereo analysis so we just assume all is correct */
     Teuchos::TimeMonitor cross_time_monitor(*cross_time);
     TEUCHOS_TEST_FOR_EXCEPTION(schema->analysis_type() == GLOBAL_DIC, std::runtime_error,
@@ -199,7 +209,8 @@ void run_cross_correlation() {
 
     schema->set_ref_image(image_files[0]);
     schema->set_def_image(stereo_image_files[0]);
-    if (schema->use_nonlinear_projection()) {
+    if (schema->use_nonlinear_projection())
+    {
         schema->project_right_image_into_left_frame(triangulation, false);
     }
     schema->execute_cross_correlation();
@@ -216,7 +227,8 @@ void run_cross_correlation() {
     schema->execute_triangulation(triangulation, schema);
 }
 
-bool run_correlation_and_triangulation(int image_it) {
+bool run_correlation_and_triangulation(int image_it)
+{
     bool failed_step = false;
     bool is_stereo = true; //This is definitely stereo
 
@@ -232,7 +244,8 @@ bool run_correlation_and_triangulation(int image_it) {
 
     schema->update_extents();
     schema->set_def_image(image_files[image_it]);
-    if (is_stereo) {
+    if (is_stereo)
+    {
         stereo_schema->update_extents();
         stereo_schema->set_def_image(stereo_image_files[image_it]);
     }
@@ -240,7 +253,8 @@ bool run_correlation_and_triangulation(int image_it) {
     int_t corr_error = schema->execute_correlation();
     if (corr_error)
         failed_step = true;
-    if (is_stereo) {
+    if (is_stereo)
+    {
         corr_error = stereo_schema->execute_correlation();
         if (corr_error)
             failed_step = true;
@@ -257,14 +271,17 @@ bool run_correlation_and_triangulation(int image_it) {
                              separate_header_file, no_text_output);
         schema->post_execution_tasks();
         // print the timing data with or without verbose flag
-        if (input_params->get<bool>(DICe::print_stats, false)) {
+        if (input_params->get<bool>(DICe::print_stats, false))
+        {
             schema->mesh()->print_field_stats();
         }
         //if(subset_info->conformal_area_defs!=Teuchos::null&&image_it==1){
         //  schema->write_control_points_image("RegionOfInterest");
         //}
-        if (is_stereo) {
-            if (input_params->get<bool>(DICe::output_stereo_files, false)) {
+        if (is_stereo)
+        {
+            if (input_params->get<bool>(DICe::output_stereo_files, false))
+            {
                 stereo_schema->write_output(output_folder, stereo_file_prefix,
                                             separate_output_file_for_each_subset, separate_header_file,
                                             no_text_output);
@@ -275,8 +292,8 @@ bool run_correlation_and_triangulation(int image_it) {
     return failed_step;
 }
 
-
-void information_extraction() {
+void information_extraction()
+{
     std::string output_folder;
     bool is_error_est_run;
     int_t proc_size = 1;
@@ -286,7 +303,8 @@ void information_extraction() {
 
     outStream = Teuchos::rcp(&std::cout, false);
 
-    if (proc_rank == 0) DEBUG_MSG("Parsing command line options");
+    if (proc_rank == 0)
+        DEBUG_MSG("Parsing command line options");
     bool force_exit = false;
 
     /******* Get the input parameters */
@@ -304,13 +322,17 @@ void information_extraction() {
 
     TEUCHOS_TEST_FOR_EXCEPTION(num_frames <= 0, std::runtime_error, "");
     *outStream << "Reference image: " << image_files[0] << std::endl;
-    for (int_t i = 1; i <= num_frames; ++i) {
-        if (i == 10 && num_frames != 10) *outStream << "..." << std::endl;
-        else if (i > 10 && i < num_frames) continue;
+    for (int_t i = 1; i <= num_frames; ++i)
+    {
+        if (i == 10 && num_frames != 10)
+            *outStream << "..." << std::endl;
+        else if (i > 10 && i < num_frames)
+            continue;
         else
             *outStream << "Deformed image: " << image_files[i] << std::endl;
     }
-    *outStream << "\n--- List of images constructed successfuly ---\n" << std::endl;
+    *outStream << "\n--- List of images constructed successfuly ---\n"
+               << std::endl;
 
     /******* Get the size of the images being used */
     DICe::utils::read_image_dimensions(image_files[0].c_str(), image_width, image_height);
@@ -319,17 +341,21 @@ void information_extraction() {
     /******* Where are we going to put the output information */
     output_folder = input_params->get<std::string>(DICe::output_folder);
     const bool separate_output_file_for_each_subset = input_params->get<bool>(
-            DICe::separate_output_file_for_each_subset, false);
-    if (separate_output_file_for_each_subset) {
+        DICe::separate_output_file_for_each_subset, false);
+    if (separate_output_file_for_each_subset)
+    {
         *outStream << "Output will be written to separate output files for each subset" << std::endl;
-    } else {
+    }
+    else
+    {
         *outStream << "Output will be written to one file per frame with all subsets included" << std::endl;
     }
     const bool separate_header_file = input_params->get<bool>(DICe::create_separate_run_info_file, false);
-    if (separate_header_file) {
+    if (separate_header_file)
+    {
         *outStream
-                << "Execution information will be written to a separate file (not placed in the output headers)"
-                << std::endl;
+            << "Execution information will be written to a separate file (not placed in the output headers)"
+            << std::endl;
     }
 
     /******* create schemas: */
@@ -341,7 +367,8 @@ void information_extraction() {
     *outStream << "Number of global subsets: " << schema->global_num_subsets() << std::endl;
     list<SubSetData> *subSets = getSubSets();
     subSets->clear();
-    for (int_t i = 0; i < schema->local_num_subsets(); ++i) {
+    for (int_t i = 0; i < schema->local_num_subsets(); ++i)
+    {
 
         stringstream sx;
         stringstream sy;
@@ -354,12 +381,13 @@ void information_extraction() {
         newOne.Subset_Idx = i;
         subSets->push_front(newOne);
 
-        if (i == 10 && schema->local_num_subsets() != 11) *outStream << "..." << std::endl;
-        else if (i > 10 && i < schema->local_num_subsets() - 1) continue;
+        if (i == 10 && schema->local_num_subsets() != 11)
+            *outStream << "..." << std::endl;
+        else if (i > 10 && i < schema->local_num_subsets() - 1)
+            continue;
         else
             *outStream << "Proc 0: subset global id: " << schema->subset_global_id(i) << " global coordinates ("
-                       << schema->local_field_value(i, DICe::field_enums::SUBSET_COORDINATES_X_FS) <<
-                       "," << schema->local_field_value(i, DICe::field_enums::SUBSET_COORDINATES_Y_FS) << ")"
+                       << schema->local_field_value(i, DICe::field_enums::SUBSET_COORDINATES_X_FS) << "," << schema->local_field_value(i, DICe::field_enums::SUBSET_COORDINATES_Y_FS) << ")"
                        << std::endl;
     }
     *outStream << std::endl;
@@ -375,22 +403,26 @@ void information_extraction() {
                                std::runtime_error,
                                "Error, calibration_parameters_file or camera_system_file required for stereo");
     TEUCHOS_TEST_FOR_EXCEPTION(input_params->isParameter(DICe::calibration_parameters_file) &&
-                               input_params->isParameter(DICe::camera_system_file),
+                                   input_params->isParameter(DICe::camera_system_file),
                                std::runtime_error,
                                "Error, both calibration_parameters_file and camera_system_file cannot be specified");
 
     if (input_params->isParameter(DICe::calibration_parameters_file) ||
-        input_params->isParameter(DICe::camera_system_file)) {
+        input_params->isParameter(DICe::camera_system_file))
+    {
         if (proc_rank == 0)
             update_legacy_txt_cal_input(
-                    input_params); // in case an old txt format cal input file is being used it needs to have width and height added to it
+                input_params); // in case an old txt format cal input file is being used it needs to have width and height added to it
 
         const std::string cal_file_name = input_params->isParameter(DICe::calibration_parameters_file)
-                                          ? input_params->get<std::string>(DICe::calibration_parameters_file) :
-                                          input_params->get<std::string>(DICe::camera_system_file);
+                                              ? input_params->get<std::string>(DICe::calibration_parameters_file)
+                                              : input_params->get<std::string>(DICe::camera_system_file);
         triangulation = Teuchos::rcp(new DICe::Triangulation(cal_file_name));
-        *outStream << "\n--- Calibration parameters read successfully ---\n" << std::endl;
-    } else {
+        *outStream << "\n--- Calibration parameters read successfully ---\n"
+                   << std::endl;
+    }
+    else
+    {
         *outStream << "Calibration parameters not specified by user" << std::endl;
     }
     TEUCHOS_TEST_FOR_EXCEPTION(is_stereo && triangulation == Teuchos::null, std::runtime_error,
@@ -403,15 +435,15 @@ void information_extraction() {
     MainDataStruct.proc_size = proc_size;
 }
 
-
-void main_stereo_3d_correlation() {
+void main_stereo_3d_correlation()
+{
 
     // iterate through the images and perform the correlation:
     bool failed_step;
     Teuchos::TimeMonitor stereo_3d_corr(*total_corr_loop);
 
-
-    for (int_t image_it = 1; image_it <= MainDataStruct.num_frames; ++image_it) {
+    for (int_t image_it = 1; image_it <= MainDataStruct.num_frames; ++image_it)
+    {
         failed_step = run_correlation_and_triangulation(image_it);
     } // image loop
 
@@ -420,14 +452,17 @@ void main_stereo_3d_correlation() {
         stereo_schema->write_stats(output_folder, MainDataStruct.stereo_file_prefix);
 
     if (failed_step)
-        *outStream << "\n--- Failed Step Occurred ---\n" << std::endl;
+        *outStream << "\n--- Failed Step Occurred ---\n"
+                   << std::endl;
     else
-        *outStream << "\n--- Successful Completion ---\n" << std::endl;
+        *outStream << "\n--- Successful Completion ---\n"
+                   << std::endl;
 
     DICe::finalize();
 }
 
-void subsetMouseCallBack(int event, int x, int y, int flags, void* userdata){
+void subsetMouseCallBack(int event, int x, int y, int flags, void *userdata)
+{
     int calc_x;
     int calc_y;
     if (x > 640)
@@ -454,27 +489,31 @@ void subsetMouseCallBack(int event, int x, int y, int flags, void* userdata){
         subSetGenerator->SetEndCorner(calc_x, calc_y);
         subSetGenerator->GenerateSubsetFile();
         StartCoord = false;
-                cout
+        cout
             << "Start: " << subSetGenerator->X_Start_Coord << "," << subSetGenerator->Y_Start_Coord << endl;
         cout << "End: " << subSetGenerator->X_End_Coord << "," << subSetGenerator->Y_End_Coord << endl;
     }
-    if (event == EVENT_MOUSEMOVE){
+    if (event == EVENT_MOUSEMOVE)
+    {
         subSetGenerator->X_End_Draw_Coord = x;
         subSetGenerator->Y_End_Draw_Coord = y;
         subSetGenerator->SetEndCorner(calc_x, calc_y);
     }
 }
 
-void projectionMouseCallBack(int event, int x, int y, int flags, void* userdata) {
-    if (event == EVENT_LBUTTONDOWN) {
+void projectionMouseCallBack(int event, int x, int y, int flags, void *userdata)
+{
+    if (event == EVENT_LBUTTONDOWN)
+    {
         srand(time(0));
         MainDataStruct.Right_X.clear();
         MainDataStruct.Right_Y.clear();
         MainDataStruct.Left_X.clear();
         MainDataStruct.Left_Y.clear();
-        for (int num_it = 0; num_it<10; num_it++) {
-            scalar_t left_x = (rand() % (640/3))+((640/2)-(640/3/2));
-            scalar_t left_y = (rand() % (480/3))+((480/2)-(480/3/2));
+        for (int num_it = 0; num_it < 10; num_it++)
+        {
+            scalar_t left_x = (rand() % (640 / 3)) + ((640 / 2) - (640 / 3 / 2));
+            scalar_t left_y = (rand() % (480 / 3)) + ((480 / 2) - (480 / 3 / 2));
             scalar_t right_x = 0;
             scalar_t right_y = 0;
             triangulation->project_left_to_right_sensor_coords(left_x, left_y, right_x, right_y);
@@ -485,7 +524,8 @@ void projectionMouseCallBack(int event, int x, int y, int flags, void* userdata)
             cout << "Left: " << left_x << ":" << left_y << " Right: " << right_x << ":" << right_y << endl;
         }
     }
-    if (event == EVENT_RBUTTONDOWN){
+    if (event == EVENT_RBUTTONDOWN)
+    {
         scalar_t right_x = 0;
         scalar_t right_y = 0;
         triangulation->project_left_to_right_sensor_coords(x, y, right_x, right_y);
@@ -496,7 +536,8 @@ void projectionMouseCallBack(int event, int x, int y, int flags, void* userdata)
     }
 }
 
-void write_timing_metrics() {
+void write_timing_metrics()
+{
     // output timing
     //  write the time output to file:
     std::stringstream timeFileName;
@@ -505,79 +546,95 @@ void write_timing_metrics() {
 
     ofs << cross_and_trian_time_str.str() << "," << state_2_timer.get()->totalElapsedTime() << ","
         << total_corr_loop.get()->totalElapsedTime() << "," << corr_time.get()->totalElapsedTime() << ","
-        << write_time.get()->totalElapsedTime() << "," << int(1.0 / state_2_timer.get()->totalElapsedTime())<<endl;
+        << write_time.get()->totalElapsedTime() << "," << int(1.0 / state_2_timer.get()->totalElapsedTime()) << endl;
 
     ofs.close();
 }
 
-void read_script(string script_name){
+void read_script(string script_name)
+{
     ifstream myfile;
     std::string line;
 
-    myfile.open (script_name);
-    while (std::getline(myfile, line)){
+    myfile.open(script_name);
+    while (std::getline(myfile, line))
+    {
         MainDataStruct.script_stack.push_back(line);
     }
 }
 
-void outputImageInformation(){
+void outputImageInformation()
+{
     Mat OutputFrame;
     Mat DisplayFrame;
+#define COLUMN_WIDTH 300
+#define FIRST_COLUMN 0
+#define SECOND_COLUMN FIRST_COLUMN + COLUMN_WIDTH
+#define THIRD_COLUMN SECOND_COLUMN + COLUMN_WIDTH
+#define FOURTH_COLUMN THIRD_COLUMN + COLUMN_WIDTH
+#define FIFTH_COLUMN FOURTH_COLUMN + COLUMN_WIDTH
 
-    drawSubsets(&frame1, &schema, MainDataStruct.WhichAxisToDraw);
+    Mat heatmapframe = Mat::zeros(frame1.rows, frame1.cols, frame1.type());
 
-    hconcat(frame1,frame2,OutputFrame);
-    resize(OutputFrame,DisplayFrame,Size(1280,480));
-    data.release();
-    data = Mat(500, 1280, CV_8UC3, Scalar(0, 0, 0));
-    Scalar textColour = Scalar(255,255,0);
-    putText(data, "Subset 1", Point(0, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
-    putText(data, "Subset 2", Point(400, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
-    putText(data, "Subset 3", Point(800, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    drawSubsets(&heatmapframe, &schema, MainDataStruct.WhichAxisToDraw);
 
-    for (int subset_idx = 0; subset_idx < 3; subset_idx++) {
+    vector<Mat> matrixOfFrames = {frame1, heatmapframe, frame2};
+    hconcat(matrixOfFrames, OutputFrame);
+    resize(OutputFrame, DisplayFrame, Size(1920, 480));
+    dataframe.release();
+    dataframe = Mat(500, 1920, CV_8UC3, Scalar(0, 0, 0));
+    Scalar textColour = Scalar(255, 255, 0);
+    putText(dataframe, "Subset 1", Point(FIRST_COLUMN, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, "Subset 2", Point(SECOND_COLUMN, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, "Subset 3", Point(THIRD_COLUMN, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, "Subset 4", Point(FOURTH_COLUMN, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, "Subset 5", Point(FIFTH_COLUMN, 30), FONT_HERSHEY_SIMPLEX, 1, textColour);
+
+    for (int subset_idx = 0; subset_idx < 5; subset_idx++)
+    {
         stringstream sx;
         stringstream sy;
         stringstream sz;
         sx << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_X_FS);
         sy << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Y_FS);
         sz << schema->local_field_value(subset_idx, MODEL_DISPLACEMENT_Z_FS);
-        putText(data, "X:", Point(subset_idx * 400, 80), FONT_HERSHEY_SIMPLEX, 1, textColour);
-        putText(data, sx.str(), Point(subset_idx * 400 + 100, 80), FONT_HERSHEY_SIMPLEX, 1, textColour);
-        putText(data, "Y:", Point(subset_idx * 400, 130), FONT_HERSHEY_SIMPLEX, 1, textColour);
-        putText(data, sy.str(), Point(subset_idx * 400 + 100, 130), FONT_HERSHEY_SIMPLEX, 1, textColour);
-        putText(data, "Z:", Point(subset_idx * 400, 180), FONT_HERSHEY_SIMPLEX, 1, textColour);
-        putText(data, sz.str(), Point(subset_idx * 400 + 100, 180), FONT_HERSHEY_SIMPLEX, 1, textColour);
+        putText(dataframe, "X:", Point(subset_idx * COLUMN_WIDTH, 80), FONT_HERSHEY_SIMPLEX, 1, textColour);
+        putText(dataframe, sx.str(), Point(subset_idx * COLUMN_WIDTH + 100, 80), FONT_HERSHEY_SIMPLEX, 1, textColour);
+        putText(dataframe, "Y:", Point(subset_idx * COLUMN_WIDTH, 130), FONT_HERSHEY_SIMPLEX, 1, textColour);
+        putText(dataframe, sy.str(), Point(subset_idx * COLUMN_WIDTH + 100, 130), FONT_HERSHEY_SIMPLEX, 1, textColour);
+        putText(dataframe, "Z:", Point(subset_idx * COLUMN_WIDTH, 180), FONT_HERSHEY_SIMPLEX, 1, textColour);
+        putText(dataframe, sz.str(), Point(subset_idx * COLUMN_WIDTH + 100, 180), FONT_HERSHEY_SIMPLEX, 1, textColour);
     }
     stringstream time_str;
 
-    putText(data, "cross_time:", Point(0, 230), FONT_HERSHEY_SIMPLEX, 1, textColour);
-    putText(data, cross_and_trian_time_str.str(), Point(300, 230), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, "cross_time:", Point(0, 230), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, cross_and_trian_time_str.str(), Point(300, 230), FONT_HERSHEY_SIMPLEX, 1, textColour);
 
-    putText(data, "state_2_timer:", Point(0, 280), FONT_HERSHEY_SIMPLEX, 1, textColour);
-    putText(data, state_2_total_time_str.str(), Point(300, 280), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, "state_2_timer:", Point(0, 280), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, state_2_total_time_str.str(), Point(300, 280), FONT_HERSHEY_SIMPLEX, 1, textColour);
 
-    putText(data, "total_corr_loop:", Point(0, 330), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, "total_corr_loop:", Point(0, 330), FONT_HERSHEY_SIMPLEX, 1, textColour);
     time_str.str("");
     time_str << total_corr_loop.get()->totalElapsedTime();
-    putText(data, time_str.str(), Point(300, 330), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, time_str.str(), Point(300, 330), FONT_HERSHEY_SIMPLEX, 1, textColour);
 
-    putText(data, "corr_time:", Point(0, 380), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, "corr_time:", Point(0, 380), FONT_HERSHEY_SIMPLEX, 1, textColour);
     time_str.str("");
     time_str << corr_time.get()->totalElapsedTime();
-    putText(data, time_str.str(), Point(300, 380), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, time_str.str(), Point(300, 380), FONT_HERSHEY_SIMPLEX, 1, textColour);
 
-    putText(data, "write_time:", Point(0, 430), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, "write_time:", Point(0, 430), FONT_HERSHEY_SIMPLEX, 1, textColour);
     time_str.str("");
     time_str << write_time.get()->totalElapsedTime();
-    putText(data, time_str.str(), Point(300, 430), FONT_HERSHEY_SIMPLEX, 1, textColour);
+    putText(dataframe, time_str.str(), Point(300, 430), FONT_HERSHEY_SIMPLEX, 1, textColour);
 
-    vconcat(DisplayFrame,data,DisplayFrame);
+    vconcat(DisplayFrame, dataframe, DisplayFrame);
 
-    imshow("Real Time DIC - Haemish Kyd",DisplayFrame);
+    imshow("Real Time DIC - Haemish Kyd", DisplayFrame);
 }
 
-void *GetVideo(void *threadid) {
+void *GetVideo(void *threadid)
+{
     long tid;
     Mat InputFrame;
     tid = (long)threadid;
@@ -601,10 +658,12 @@ void *GetVideo(void *threadid) {
     }
 }
 
-void *WriteImageFiles(void *threadid) {
+void *WriteImageFiles(void *threadid)
+{
     long tid;
     tid = (long)threadid;
-    while (MainDataStruct.WriteThreadRunning) {        
+    while (MainDataStruct.WriteThreadRunning)
+    {
         ReadComplete.wait(tid);
         imwrite("./rdisk_images/Img_0001_0.jpeg", frame1);
         imwrite("./rdisk_images/Img_0001_1.jpeg", frame2);
@@ -613,14 +672,16 @@ void *WriteImageFiles(void *threadid) {
     pthread_exit(NULL);
 }
 
-string gstreamer_pipeline (int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method) {    
+string gstreamer_pipeline(int capture_width, int capture_height, int display_width, int display_height, int framerate, int flip_method)
+{
     return "nvarguscamerasrc ! video/x-raw(memory:NVMM), width=(int)" + std::to_string(capture_width) + ", height=(int)" +
            std::to_string(capture_height) + ", format=(string)NV12, framerate=(fraction)" + std::to_string(framerate) +
            "/1 ! nvvidconv flip-method=" + std::to_string(flip_method) + " ! video/x-raw, width=(int)" + std::to_string(display_width) + ", height=(int)" +
            std::to_string(display_height) + ", format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink";
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     int return_val;
     int start_calibration = false;
     int capture_image_for_calib = false;
@@ -634,18 +695,19 @@ int main(int argc, char *argv[]) {
     pthread_t threads[1];
     Mat OutputFrame;
     Mat DisplayFrame;
-	int capture_width = 4032 ;
-    int capture_height = 3040 ;
-    int display_width = 2048 ;
-    int display_height = 1536 ;    
-    int framerate = 13 ;
-    int flip_method = 2 ;
+    int capture_width = 4032;
+    int capture_height = 3040;
+    int display_width = 2048;
+    int display_height = 1536;
+    int framerate = 13;
+    int flip_method = 2;
     Mat InputFrame;
 
-    subSetGenerator = new SubSetData(0,0,0);
+    subSetGenerator = new SubSetData(0, 0, 0);
     MainDataStruct.WhichAxisToDraw = 0; //Set it to Z
     MainDataStruct.use_arducam = false;
-    if (argc == 3){
+    if (argc == 3)
+    {
         if (strcmp(argv[1], "--arducam") == 0)
         {
             MainDataStruct.use_arducam = true;
@@ -660,7 +722,8 @@ int main(int argc, char *argv[]) {
             read_script(argv[2]);
         }
     }
-    else if (argc == 1){
+    else if (argc == 1)
+    {
         if (strcmp(argv[1], "--only_cc") == 0)
         {
             only_cc = true;
@@ -674,13 +737,16 @@ int main(int argc, char *argv[]) {
 
     string port("/dev/ttyUSB0");
     SerialPort serial_port(port);
-    try {
+    try
+    {
         serial_port.Open();
     }
-    catch (const SerialPort::OpenFailed &) {
+    catch (const SerialPort::OpenFailed &)
+    {
         cout << "Serial Port did not open correctly." << endl;
     }
-    if (serial_port.IsOpen()) {
+    if (serial_port.IsOpen())
+    {
         serial_port.SetBaudRate(SerialPort::BAUD_115200);
         serial_port.SetCharSize(SerialPort::CHAR_SIZE_8);
         serial_port.SetFlowControl(SerialPort::FLOW_CONTROL_NONE);
@@ -692,17 +758,18 @@ int main(int argc, char *argv[]) {
 
     if (!MainDataStruct.use_arducam)
     {
-        cap2.set(CAP_PROP_FRAME_WIDTH,1280);
-        cap2.set(CAP_PROP_FRAME_HEIGHT,960);
-        cap1.set(CAP_PROP_FRAME_WIDTH,1280);
-        cap1.set(CAP_PROP_FRAME_HEIGHT,960);
+        cap2.set(CAP_PROP_FRAME_WIDTH, 1280);
+        cap2.set(CAP_PROP_FRAME_HEIGHT, 960);
+        cap1.set(CAP_PROP_FRAME_WIDTH, 1280);
+        cap1.set(CAP_PROP_FRAME_HEIGHT, 960);
     }
 
     Brightness = 0;
     MainDataStruct.FrameWidth = 640;
     MainDataStruct.FrameHeight = 480;
 
-    cout << "====================================" << endl << endl;
+    cout << "====================================" << endl
+         << endl;
     cout << "Default Brightness -------> " << Brightness << endl;
     cout << "Default Width      -------> " << MainDataStruct.FrameWidth << endl;
     cout << "Default Height     -------> " << MainDataStruct.FrameHeight << endl;
@@ -712,34 +779,44 @@ int main(int argc, char *argv[]) {
     {
         cap1.open(1);
         cap2.open(2);
-        if (!cap1.isOpened()) {  // check if we succeeded
+        if (!cap1.isOpened())
+        { // check if we succeeded
             std::cout << "First camera cannot be found\n";
             return -1;
-        } else {
+        }
+        else
+        {
             cout << "Camera 1 is open\n";
         }
-        if (!cap2.isOpened()) {  // check if we succeeded
+        if (!cap2.isOpened())
+        { // check if we succeeded
             std::cout << "Second camera cannot be found\n";
             return -1;
-        } else {
+        }
+        else
+        {
             cout << "Camera 2 is open\n";
         }
     }
-    else{ 
+    else
+    {
         std::string pipeline = gstreamer_pipeline(capture_width,
-        capture_height,
-        display_width,
-        display_height,
-        framerate,
-        flip_method);
+                                                  capture_height,
+                                                  display_width,
+                                                  display_height,
+                                                  framerate,
+                                                  flip_method);
         std::cout << "Using pipeline: \n\t" << pipeline << "\n";
-        
+
         cap1.open(pipeline, cv::CAP_GSTREAMER);
-        
-        if(!cap1.isOpened()) {
-            std::cout<<"Failed to open camera."<<std::endl;
+
+        if (!cap1.isOpened())
+        {
+            std::cout << "Failed to open camera." << std::endl;
             return (-1);
-        } else {
+        }
+        else
+        {
             cout << "Arducam is open\n";
         }
     }
@@ -748,210 +825,232 @@ int main(int argc, char *argv[]) {
     std::stringstream timeFileName;
     timeFileName << "timing.txt";
     std::ofstream ofs(timeFileName.str(), std::ofstream::out);
-    ofs << "Cross Correlation and Triangulations" << "," << "Entire Process" << ","
-        << "Correlation Loop" << "," << "Correlation Process" << ","
-        << "Write Process" << "," << "Hz" <<endl;
+    ofs << "Cross Correlation and Triangulations"
+        << ","
+        << "Entire Process"
+        << ","
+        << "Correlation Loop"
+        << ","
+        << "Correlation Process"
+        << ","
+        << "Write Process"
+        << ","
+        << "Hz" << endl;
     ofs.close();
 
     ScriptRun script_obj = (ScriptRun(&MainDataStruct.script_stack, &serial_port, &schema));
     namedWindow("Real Time DIC - Haemish Kyd", WINDOW_AUTOSIZE);
-    for (;;) {
-        switch (system_state) {
-            case 0: {
-                if (!MainDataStruct.use_arducam)
+    for (;;)
+    {
+        switch (system_state)
+        {
+        case 0:
+        {
+            if (!MainDataStruct.use_arducam)
+            {
+                cap2 >> frame1; // get a new frame from camera
+                cap1 >> frame2;
+            }
+            else
+            {
+                if (!cap1.read(InputFrame))
                 {
-                    cap2 >> frame1; // get a new frame from camera
-                    cap1 >> frame2;
+                    std::cout << "Capture read error" << std::endl;
+                    break;
                 }
-                else{
-                    if (!cap1.read(InputFrame)) {
-                        std::cout<<"Capture read error"<<std::endl;
-                        break;
-                    }
-                    frame1 = InputFrame(cv::Rect(0,0,InputFrame.cols/2,InputFrame.rows));
-                    frame2 = InputFrame(cv::Rect(InputFrame.cols/2,0,InputFrame.cols/2,InputFrame.rows));
-                }				
-                /**
+                frame1 = InputFrame(cv::Rect(0, 0, InputFrame.cols / 2, InputFrame.rows));
+                frame2 = InputFrame(cv::Rect(InputFrame.cols / 2, 0, InputFrame.cols / 2, InputFrame.rows));
+            }
+            /**
                  * If we only do the cross correlation (mapping points to points) we can use
                  * this to trace the accuracy of the points.
                  */
-                if (!MainDataStruct.Left_X.empty() || !MainDataStruct.Left_Y.empty()) {
-                    for (int num_it = 0; num_it < MainDataStruct.Left_X.size(); num_it++) {
-                        Scalar colour_choice = Scalar(255, 0 , 0);
-                        circle(frame1, Point(MainDataStruct.Left_X.at(num_it), MainDataStruct.Left_Y.at(num_it)), 3,
-                               colour_choice, 2);
-                        circle(frame2, Point(MainDataStruct.Right_X.at(num_it), MainDataStruct.Right_Y.at(num_it)), 3,
-                               colour_choice, 2);
-                    }
+            if (!MainDataStruct.Left_X.empty() || !MainDataStruct.Left_Y.empty())
+            {
+                for (int num_it = 0; num_it < MainDataStruct.Left_X.size(); num_it++)
+                {
+                    Scalar colour_choice = Scalar(255, 0, 0);
+                    circle(frame1, Point(MainDataStruct.Left_X.at(num_it), MainDataStruct.Left_Y.at(num_it)), 3,
+                           colour_choice, 2);
+                    circle(frame2, Point(MainDataStruct.Right_X.at(num_it), MainDataStruct.Right_Y.at(num_it)), 3,
+                           colour_choice, 2);
                 }
-                /**
+            }
+            /**
                  * This allows for one user point that allows one to check the accuracy of a
                  * point in the left mapped to a point in the right.
                  */
-                if ((MainDataStruct.User_Left_X != 0) || (MainDataStruct.User_Left_Y != 0)){
-                    Scalar colour_choice = Scalar(0, 255 , 0);
-                    circle(frame1, Point(MainDataStruct.User_Left_X, MainDataStruct.User_Left_Y), 3,
-                           colour_choice, 2);
-                    circle(frame2, Point(MainDataStruct.User_Right_X, MainDataStruct.User_Right_Y), 3,
-                           colour_choice, 2);
-                }
+            if ((MainDataStruct.User_Left_X != 0) || (MainDataStruct.User_Left_Y != 0))
+            {
+                Scalar colour_choice = Scalar(0, 255, 0);
+                circle(frame1, Point(MainDataStruct.User_Left_X, MainDataStruct.User_Left_Y), 3,
+                       colour_choice, 2);
+                circle(frame2, Point(MainDataStruct.User_Right_X, MainDataStruct.User_Right_Y), 3,
+                       colour_choice, 2);
+            }
 
-                if (start_calibration != true)
-                {
-                    hconcat(frame1, frame2, OutputFrame);
-                }
-                else
-                {
-                    cal_frame1 = frame1.clone();
-                    cal_frame2 = frame2.clone();
-                    string cal_text = "Calibrating...." + to_string(corner_display_counter);
-                    cv::putText(cal_frame1, cal_text, Point(10, 50),
-                                FONT_HERSHEY_DUPLEX, 2.0, Scalar(255, 255, 255), 1, cv::LINE_AA);
-                    cv::putText(cal_frame2, cal_text, Point(10, 50),
-                                FONT_HERSHEY_DUPLEX, 2.0, Scalar(255, 255, 255), 1, cv::LINE_AA);
+            if (start_calibration != true)
+            {
+                hconcat(frame1, frame2, OutputFrame);
+            }
+            else
+            {
+                cal_frame1 = frame1.clone();
+                cal_frame2 = frame2.clone();
+                string cal_text = "Calibrating...." + to_string(corner_display_counter);
+                cv::putText(cal_frame1, cal_text, Point(10, 50),
+                            FONT_HERSHEY_DUPLEX, 2.0, Scalar(255, 255, 255), 1, cv::LINE_AA);
+                cv::putText(cal_frame2, cal_text, Point(10, 50),
+                            FONT_HERSHEY_DUPLEX, 2.0, Scalar(255, 255, 255), 1, cv::LINE_AA);
 
-                    if (corner_display_counter >= 100)
+                if (corner_display_counter >= 100)
+                {
+                    Teuchos::RCP<Teuchos::ParameterList> params = Teuchos::rcp(new Teuchos::ParameterList());
+                    Teuchos::Ptr<Teuchos::ParameterList> params_ptr(params.get());
+
+                    try
                     {
-                        Teuchos::RCP<Teuchos::ParameterList> params = Teuchos::rcp(new Teuchos::ParameterList());
-                        Teuchos::Ptr<Teuchos::ParameterList> params_ptr(params.get());
-                        
-                        try
-                        {
-                            Teuchos::updateParametersFromXmlFile("cal_input_checker_board.xml", params_ptr);
-                        }
-                        catch (std::exception &e)
-                        {
-                            std::cout << e.what() << std::endl;
-                            TEUCHOS_TEST_FOR_EXCEPTION(true, std::runtime_error, "invalid xml cal input file");
-                        }
-                        Mat sing_chan_cal_frame1 = cal_frame1.clone();
-                        Mat sing_chan_cal_frame2 = cal_frame2.clone();
-                        cv::cvtColor(cal_frame1, sing_chan_cal_frame1, cv::COLOR_BGR2GRAY);
-                        cv::cvtColor(cal_frame2, sing_chan_cal_frame2, cv::COLOR_BGR2GRAY);
-
-                        Size board_size; //used by openCV
-                        board_size.width = params->get<int_t>(DICe::num_cal_fiducials_x);
-                        board_size.height = params->get<int_t>(DICe::num_cal_fiducials_y);
-                        std::cout << "Checking calibration image." << std::endl;
-                        const bool found1 = findChessboardCorners(sing_chan_cal_frame1, board_size, corners1, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_NORMALIZE_IMAGE);
-                        if (found1)
-                        {
-                            std::cout << "Frame 1 -> opencv_checkerboard_targets(): found " << corners1.size() << " checkerboard intersections" << std::endl;
-                        }
-                        const bool found2 = findChessboardCorners(sing_chan_cal_frame2, board_size, corners2, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_NORMALIZE_IMAGE);
-                        if (found2)
-                        {
-                            std::cout << "Frame 2 -> opencv_checkerboard_targets(): found " << corners2.size() << " checkerboard intersections" << std::endl;
-                        }
-                        if ((corners1.size() == board_size.width * board_size.height) && (corners2.size() == board_size.width * board_size.height)){
-                            std::cout << "All points found." << std::endl;
-                            capture_image_for_calib = true;
-                        }
-                        corner_display_counter = 0;
-                        // opencv_checkerboard_targets(sing_chan_cal_frame1, *params, corners1);
-                        // opencv_checkerboard_targets(sing_chan_cal_frame2, *params, corners2);
+                        Teuchos::updateParametersFromXmlFile("cal_input_checker_board.xml", params_ptr);
                     }
-                    for (int_t i_pnt = 0; i_pnt < corners1.size(); i_pnt++)
+                    catch (std::exception &e)
                     {
-                        circle(cal_frame1, corners1[i_pnt], 10, Scalar(0, 255, 0));
-                    } // end corner loop x
-                    for (int_t i_pnt = 0; i_pnt < corners2.size(); i_pnt++)
+                        std::cout << e.what() << std::endl;
+                        TEUCHOS_TEST_FOR_EXCEPTION(true, std::runtime_error, "invalid xml cal input file");
+                    }
+                    Mat sing_chan_cal_frame1 = cal_frame1.clone();
+                    Mat sing_chan_cal_frame2 = cal_frame2.clone();
+                    cv::cvtColor(cal_frame1, sing_chan_cal_frame1, cv::COLOR_BGR2GRAY);
+                    cv::cvtColor(cal_frame2, sing_chan_cal_frame2, cv::COLOR_BGR2GRAY);
+
+                    Size board_size; //used by openCV
+                    board_size.width = params->get<int_t>(DICe::num_cal_fiducials_x);
+                    board_size.height = params->get<int_t>(DICe::num_cal_fiducials_y);
+                    std::cout << "Checking calibration image." << std::endl;
+                    const bool found1 = findChessboardCorners(sing_chan_cal_frame1, board_size, corners1, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_NORMALIZE_IMAGE);
+                    if (found1)
                     {
-                        circle(cal_frame2, corners2[i_pnt], 10, Scalar(0, 255, 0));
-                    } // end corner loop x
-                    
-                    corner_display_counter++;
-                    hconcat(cal_frame1, cal_frame2, OutputFrame);
+                        std::cout << "Frame 1 -> opencv_checkerboard_targets(): found " << corners1.size() << " checkerboard intersections" << std::endl;
+                    }
+                    const bool found2 = findChessboardCorners(sing_chan_cal_frame2, board_size, corners2, CALIB_CB_ADAPTIVE_THRESH | CALIB_CB_NORMALIZE_IMAGE);
+                    if (found2)
+                    {
+                        std::cout << "Frame 2 -> opencv_checkerboard_targets(): found " << corners2.size() << " checkerboard intersections" << std::endl;
+                    }
+                    if ((corners1.size() == board_size.width * board_size.height) && (corners2.size() == board_size.width * board_size.height))
+                    {
+                        std::cout << "All points found." << std::endl;
+                        capture_image_for_calib = true;
+                    }
+                    corner_display_counter = 0;
+                    // opencv_checkerboard_targets(sing_chan_cal_frame1, *params, corners1);
+                    // opencv_checkerboard_targets(sing_chan_cal_frame2, *params, corners2);
                 }
-                /**
+                for (int_t i_pnt = 0; i_pnt < corners1.size(); i_pnt++)
+                {
+                    circle(cal_frame1, corners1[i_pnt], 10, Scalar(0, 255, 0));
+                } // end corner loop x
+                for (int_t i_pnt = 0; i_pnt < corners2.size(); i_pnt++)
+                {
+                    circle(cal_frame2, corners2[i_pnt], 10, Scalar(0, 255, 0));
+                } // end corner loop x
+
+                corner_display_counter++;
+                hconcat(cal_frame1, cal_frame2, OutputFrame);
+            }
+            /**
                  * If we only do the cross correlation (mapping points to points) we can
                  * use this to trace the accuracy of the points.
                  */
-                if (!MainDataStruct.Left_X.empty() || !MainDataStruct.Left_Y.empty())
+            if (!MainDataStruct.Left_X.empty() || !MainDataStruct.Left_Y.empty())
+            {
+                for (int num_it = 0; num_it < MainDataStruct.Left_X.size(); num_it++)
                 {
-                    for (int num_it = 0; num_it < MainDataStruct.Left_X.size(); num_it++)
-                    {
-                        Scalar colour_choice = Scalar(255, 0, 0);
-                        line(OutputFrame, Point(MainDataStruct.Left_X.at(num_it), MainDataStruct.Left_Y.at(num_it)),
-                                Point(MainDataStruct.Right_X.at(num_it) + 640, MainDataStruct.Right_Y.at(num_it)),
-                                colour_choice);
-                    }
-                }
-                if ((MainDataStruct.User_Right_X != 0) || (MainDataStruct.User_Right_Y != 0))
-                {
-                    Scalar colour_choice = Scalar(0, 255, 0);
-                    line(OutputFrame, Point(MainDataStruct.User_Left_X, MainDataStruct.User_Left_Y),
-                            Point(MainDataStruct.User_Right_X + 640, MainDataStruct.User_Right_Y),
-                            colour_choice);
-                }
-                resize(OutputFrame, DisplayFrame, Size(1280, 480));
-                if (StartCoord == true)
-                {
-                    Rect r = Rect(subSetGenerator->X_Start_Draw_Coord,
-                                    subSetGenerator->Y_Start_Draw_Coord,
-                                    subSetGenerator->X_End_Draw_Coord - subSetGenerator->X_Start_Draw_Coord,
-                                    subSetGenerator->Y_End_Draw_Coord - subSetGenerator->Y_Start_Draw_Coord);
-                    rectangle(DisplayFrame, r, Scalar(255, 0, 0), 1, 8, 0);
-                }
-                imshow("Real Time DIC - Haemish Kyd", DisplayFrame);
-
-                if (start_calibration == true)
-                {
-                    run_calibration(frame1, frame2, &capture_image_for_calib, &start_calibration);
+                    Scalar colour_choice = Scalar(255, 0, 0);
+                    line(OutputFrame, Point(MainDataStruct.Left_X.at(num_it), MainDataStruct.Left_Y.at(num_it)),
+                         Point(MainDataStruct.Right_X.at(num_it) + 640, MainDataStruct.Right_Y.at(num_it)),
+                         colour_choice);
                 }
             }
-                break;
-            case 1:
-                if (!MainDataStruct.use_arducam)
-                {
-                    cap2 >> frame1; // get a new frame from camera
-                    cap1 >> frame2;
-                }
-                else
-                {
-                    if (!cap1.read(InputFrame)) {
-                        std::cout<<"Capture read error"<<std::endl;
-                        break;
-                    }
-                    frame1 = InputFrame(cv::Rect(0,0,InputFrame.cols/2,InputFrame.rows));
-                    frame2 = InputFrame(cv::Rect(InputFrame.cols/2,0,InputFrame.cols/2,InputFrame.rows));
-                }
-                std::cout << "DICE initialize." << std::endl;
-                DICe::initialize(argc, argv);
-                std::cout << "DICE information extraction." << std::endl;
-                information_extraction();
-                std::cout << "DICE run initial cross correlation." << std::endl;
-                run_cross_correlation();
-
-                cross_and_trian_time_str.str("");
-                cross_and_trian_time_str << cross_time.get()->totalElapsedTime();
-
-                if (only_cc == true){
-                    system_state = 0;
-                    setMouseCallback("Real Time DIC - Haemish Kyd",projectionMouseCallBack);
-                }
-                else {
-                    (void) pthread_create(&threads[0], NULL, WriteImageFiles, (void *) 0);
-                    (void)pthread_create(&threads[0], NULL, GetVideo, (void *)0);
-                    ReadComplete.notify(0);
-                    system_state = 2;
-                    std::cout << "DICE initialisation complete." << std::endl;
-                }
-                break;
-            case 2: {
-                Teuchos::TimeMonitor state_2_monitor(*state_2_timer);
-
-                WriteComplete.wait(0);
-                main_stereo_3d_correlation();
-
-                outputImageInformation();
+            if ((MainDataStruct.User_Right_X != 0) || (MainDataStruct.User_Right_Y != 0))
+            {
+                Scalar colour_choice = Scalar(0, 255, 0);
+                line(OutputFrame, Point(MainDataStruct.User_Left_X, MainDataStruct.User_Left_Y),
+                     Point(MainDataStruct.User_Right_X + 640, MainDataStruct.User_Right_Y),
+                     colour_choice);
             }
-                break;
+            resize(OutputFrame, DisplayFrame, Size(1280, 480));
+            if (StartCoord == true)
+            {
+                Rect r = Rect(subSetGenerator->X_Start_Draw_Coord,
+                              subSetGenerator->Y_Start_Draw_Coord,
+                              subSetGenerator->X_End_Draw_Coord - subSetGenerator->X_Start_Draw_Coord,
+                              subSetGenerator->Y_End_Draw_Coord - subSetGenerator->Y_Start_Draw_Coord);
+                rectangle(DisplayFrame, r, Scalar(255, 0, 0), 1, 8, 0);
+            }
+            imshow("Real Time DIC - Haemish Kyd", DisplayFrame);
+
+            if (start_calibration == true)
+            {
+                run_calibration(frame1, frame2, &capture_image_for_calib, &start_calibration);
+            }
+        }
+        break;
+        case 1:
+            if (!MainDataStruct.use_arducam)
+            {
+                cap2 >> frame1; // get a new frame from camera
+                cap1 >> frame2;
+            }
+            else
+            {
+                if (!cap1.read(InputFrame))
+                {
+                    std::cout << "Capture read error" << std::endl;
+                    break;
                 }
+                frame1 = InputFrame(cv::Rect(0, 0, InputFrame.cols / 2, InputFrame.rows));
+                frame2 = InputFrame(cv::Rect(InputFrame.cols / 2, 0, InputFrame.cols / 2, InputFrame.rows));
+            }
+            std::cout << "DICE initialize." << std::endl;
+            DICe::initialize(argc, argv);
+            std::cout << "DICE information extraction." << std::endl;
+            information_extraction();
+            std::cout << "DICE run initial cross correlation." << std::endl;
+            run_cross_correlation();
+
+            cross_and_trian_time_str.str("");
+            cross_and_trian_time_str << cross_time.get()->totalElapsedTime();
+
+            if (only_cc == true)
+            {
+                system_state = 0;
+                setMouseCallback("Real Time DIC - Haemish Kyd", projectionMouseCallBack);
+            }
+            else
+            {
+                (void)pthread_create(&threads[0], NULL, WriteImageFiles, (void *)0);
+                (void)pthread_create(&threads[0], NULL, GetVideo, (void *)0);
+                ReadComplete.notify(0);
+                system_state = 2;
+                std::cout << "DICE initialisation complete." << std::endl;
+            }
+            break;
+        case 2:
+        {
+            Teuchos::TimeMonitor state_2_monitor(*state_2_timer);
+
+            WriteComplete.wait(0);
+            main_stereo_3d_correlation();
+
+            outputImageInformation();
+        }
+        break;
+        }
         state_2_total_time_str.str("");
-        state_2_total_time_str << state_2_timer.get()->totalElapsedTime()<<"("<<int(1.0/state_2_timer.get()->totalElapsedTime())<<" Hz)";
+        state_2_total_time_str << state_2_timer.get()->totalElapsedTime() << "(" << int(1.0 / state_2_timer.get()->totalElapsedTime()) << " Hz)";
 
-        if (system_state > 0) {
+        if (system_state > 0)
+        {
             write_timing_metrics();
         }
 
@@ -962,8 +1061,10 @@ int main(int argc, char *argv[]) {
         /**
          * Run the calibration
          */
-        if (c == 'c'){
-            if (start_calibration == true){
+        if (c == 'c')
+        {
+            if (start_calibration == true)
+            {
                 capture_image_for_calib = true;
             }
             else
@@ -974,7 +1075,8 @@ int main(int argc, char *argv[]) {
         /**
          * Quit the program completely
          */
-        if (c == 'q') {
+        if (c == 'q')
+        {
             MainDataStruct.WriteThreadRunning = false;
             pthread_cancel(threads[0]);
             break;
@@ -982,7 +1084,8 @@ int main(int argc, char *argv[]) {
         /**
          * Initiate the 3D DIC
          */
-        if (c == 'i') {
+        if (c == 'i')
+        {
             imwrite("./rdisk_images/Img_0000_0.jpeg", frame1);
             imwrite("./rdisk_images/Img_0000_1.jpeg", frame2);
             system_state = 1;
@@ -990,18 +1093,25 @@ int main(int argc, char *argv[]) {
         /**
          * Run the pre-loaded script
          */
-        if (c == 'r') {
+        if (c == 'r')
+        {
             MainDataStruct.myScript = &script_obj;
+            MainDataStruct.myScript->NumberOfSubsets = schema->global_num_subsets();
+            MainDataStruct.myScript->WhichAxisToDraw = MainDataStruct.WhichAxisToDraw;
+            MainDataStruct.myScript->InitStep();
         }
-        if (MainDataStruct.myScript != NULL){
-            if (MainDataStruct.myScript->_script_loaded){
+        if (MainDataStruct.myScript != NULL)
+        {
+            if (MainDataStruct.myScript->_script_loaded)
+            {
                 MainDataStruct.myScript->ExecuteStep();
             }
         }
         /**
          * Define the region of interest
          */
-        if (c == 's'){
+        if (c == 's')
+        {
             setMouseCallback("Real Time DIC - Haemish Kyd", subsetMouseCallBack);
         }
 
@@ -1023,18 +1133,21 @@ int main(int argc, char *argv[]) {
             MainDataStruct.WhichAxisToDraw = 0;
             cout << "Z Axis Chosen" << endl;
         }
-        if (serial_port.IsOpen()) {
+        if (serial_port.IsOpen())
+        {
             /**
              * Run the target forward a millimetre
              */
-            if (c == '+') {
+            if (c == '+')
+            {
                 serial_port.Write("F0.12\n");
                 cout << "Forward" << endl;
             }
             /**
              * Run the target backwards a millimetre
              */
-            if (c == '-') {
+            if (c == '-')
+            {
                 serial_port.Write("B0.12\n");
                 cout << "Back" << endl;
             }
@@ -1054,7 +1167,8 @@ int main(int argc, char *argv[]) {
                 serial_port.Write("X200\n");
                 cout << "Cont. Back" << endl;
             }
-            while (serial_port.IsDataAvailable()) {
+            while (serial_port.IsDataAvailable())
+            {
                 char data_byte;
                 // Specify a timeout value (in milliseconds).
                 int ms_timeout = 250;
@@ -1072,8 +1186,8 @@ int main(int argc, char *argv[]) {
     }
     else
     {
-	    cap1.release();
+        cap1.release();
     }
-    cv::destroyAllWindows() ;
+    cv::destroyAllWindows();
     return return_val;
 }

@@ -25,24 +25,64 @@
 
 #pragma once
 
-// We check if windows.h. is already included, as this might break compilation. See: https://sciplot.github.io/known_issues/
-#ifdef _WINDOWS_
-#ifdef _MSC_VER
-#pragma message(__FILE__ "(): warning: You might run into compiler errors if windows.h is included before sciplot.hpp! See: https://sciplot.github.io/known_issues/")
-#else
-#warning You might run into compiler errors if windows.h is included before sciplot.hpp! See: https://sciplot.github.io/known_issues/
-#endif // _MSC_VER
-#endif // _WINDOWS_
-
 // sciplot includes
-#include <sciplot/Constants.hpp>
 #include <sciplot/Default.hpp>
-#include <sciplot/Enums.hpp>
-#include <sciplot/Figure.hpp>
-#include <sciplot/Palettes.hpp>
-#include <sciplot/Plot.hpp>
-#include <sciplot/Plot3D.hpp>
-#include <sciplot/PlotBase.hpp>
-#include <sciplot/StringOrDouble.hpp>
 #include <sciplot/Utils.hpp>
-#include <sciplot/Vec.hpp>
+#include <sciplot/specs/TicsSpecsBaseOf.hpp>
+
+namespace sciplot
+{
+
+/// The class used to specify options for tics.
+class TicsSpecs : public TicsSpecsBaseOf<TicsSpecs>
+{
+  public:
+    /// Construct a default TicsSpecs instance.
+    TicsSpecs();
+
+    /// Set the tics to be displayed on the front of all plot elements.
+    auto stackFront() -> TicsSpecs&;
+
+    /// Set the tics to be displayed on the back of all plot elements.
+    auto stackBack() -> TicsSpecs&;
+
+    /// Convert this TicsSpecs object into a gnuplot formatted string.
+    auto repr() const -> std::string;
+
+  private:
+    /// The depth where the tics are displayed (back or front).
+    std::string m_depth;
+};
+
+inline TicsSpecs::TicsSpecs()
+    : TicsSpecsBaseOf<TicsSpecs>()
+{
+    stackFront();
+}
+
+inline auto TicsSpecs::stackFront() -> TicsSpecs&
+{
+    m_depth = "front";
+    return *this;
+}
+
+inline auto TicsSpecs::stackBack() -> TicsSpecs&
+{
+    m_depth = "back";
+    return *this;
+}
+
+inline auto TicsSpecs::repr() const -> std::string
+{
+    const auto baserepr = TicsSpecsBaseOf<TicsSpecs>::repr();
+
+    if (isHidden())
+        return baserepr;
+
+    std::stringstream ss;
+    ss << baserepr << " ";
+    ss << m_depth;
+    return internal::removeExtraWhitespaces(ss.str());
+}
+
+} // namespace sciplot

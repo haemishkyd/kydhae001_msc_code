@@ -13,7 +13,9 @@
 
 #include <sciplot/sciplot.hpp>
 
+#define throw(...)
 #include "SerialPort.h"
+#undef throw
 #include "ScriptRun.h"
 
 using namespace DICe::field_enums;
@@ -22,7 +24,7 @@ using namespace std;
 using namespace std::chrono;
 using namespace sciplot;
 
-plot plot_obj;
+Plot plot_obj;
 
 ScriptRun::ScriptRun(vector<string> *p_stack, SerialPort *controlPort, Teuchos::RCP<DICe::Schema> *passedSchema){
     _script_stack = p_stack;
@@ -34,9 +36,17 @@ ScriptRun::ScriptRun(vector<string> *p_stack, SerialPort *controlPort, Teuchos::
     DataSampleInterval = 0;
     // Change its palette
     plot_obj.palette("dark2");
+    plot_obj.legend().show(false);
     cout << "Script Loaded: "<< _script_stack->size() << " lines." << endl;
     for (int p=0; p<_script_stack->size();p++){
         cout << _script_stack->at(p) << endl;
+    }
+}
+
+void ScriptRun::InitStep(){
+    for (int subset_idx = 0; subset_idx < NumberOfSubsets; subset_idx++){
+        vector<float> single_subset;
+        _y_plot.push_back(single_subset);
     }
 }
 
@@ -73,7 +83,20 @@ void ScriptRun::ExecuteStep(){
         duration<double, std::milli> time_span = high_resolution_clock::now() - DataSampleTimer;
         if ((DataSampleInterval > 0) && (time_span.count() > DataSampleInterval)){
             _x_plot.push_back(X_Axis_Counter++);
-            _y_plot.push_back((*_schema)->local_field_value(2, MODEL_DISPLACEMENT_Z_FS));
+            for (int subset_idx = 0; subset_idx < NumberOfSubsets; subset_idx++){
+                switch (WhichAxisToDraw){
+                    case 0:
+                        _y_plot[subset_idx].push_back((*_schema)->local_field_value(subset_idx, MODEL_DISPLACEMENT_Z_FS));
+                        break;
+                    case 1:
+                        _y_plot[subset_idx].push_back((*_schema)->local_field_value(subset_idx, MODEL_DISPLACEMENT_Y_FS));
+                        break;
+                    case 2:
+                        _y_plot[subset_idx].push_back((*_schema)->local_field_value(subset_idx, MODEL_DISPLACEMENT_X_FS));
+                        break;
+                }
+                
+            }
             DataSampleTimer = high_resolution_clock::now();
         }
 
@@ -143,9 +166,12 @@ void ScriptRun::ExecuteStep(){
             }
         }
 
-        if (current_command == "DRAW") {
-            plot_obj.draw(_x_plot, _y_plot);
+        if (current_command == "DRAW") {            
+            for (int subset_idx = 0; subset_idx < NumberOfSubsets; subset_idx++){
+                plot_obj.drawCurve(_x_plot, _y_plot[subset_idx]).label("Subset");
+            }            
             plot_obj.show();
+            plot_obj.save("script_output.pdf");
             cout << "Drawing Result" << endl;
             CurrentStackPointer++;
         }

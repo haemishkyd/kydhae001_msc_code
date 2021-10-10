@@ -21,36 +21,134 @@ list<SubSetData> *getSubSets(){
     return &subSets;
 }
 
+vector<int> rgb(double ratio)
+{
+    vector<int> rgb_array;
+    //we want to normalize ratio so that it fits in to 6 regions
+    //where each region is 256 units long
+    int normalized = int(ratio * 256 * 5);
+
+    //find the distance to the start of the closest region
+    int x = normalized % 256;
+
+    int red = 0, grn = 0, blu = 0;
+    // switch (normalized / 256)
+    // {
+    // case 0:
+    //     red = 255;
+    //     grn = x;
+    //     blu = 0;
+    //     break; //red
+    // case 1:
+    //     red = 255 - x;
+    //     grn = 255;
+    //     blu = 0;
+    //     break; //yellow
+    // case 2:
+    //     red = 0;
+    //     grn = 255;
+    //     blu = x;
+    //     break; //green
+    // case 3:
+    //     red = 0;
+    //     grn = 255 - x;
+    //     blu = 255;
+    //     break; //cyan
+    // case 4:
+    //     red = x;
+    //     grn = 0;
+    //     blu = 255;
+    //     break; //blue
+    // case 5:
+    //     red = 255;
+    //     grn = 0;
+    //     blu = 255 - x;
+    //     break; //magenta
+    // }
+    switch(normalized/256)
+    {
+    case 0:
+        red = 0;
+        grn = x;
+        blu = 255;
+        break; //blue
+    case 1:
+        red = 0;
+        grn = 255;
+        blu = 255 - x;
+        break; //cyan
+    case 2:
+        red = x;
+        grn = 255;
+        blu = 0;
+        break; //green
+    case 3:
+        red = 255;
+        grn = 255 - x;
+        blu = 0;
+        break; //yellow
+    case 4:
+        red = 255;
+        grn = 0;
+        blu = x;
+        break; //red
+    }
+
+    rgb_array.push_back(red);
+    rgb_array.push_back(grn);
+    rgb_array.push_back(blu);
+    return rgb_array;
+}
+
 void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema, int which_axis_to_draw){
-    char disp_colour;
+    double disp_value;
+    vector<int> temp_col;
+    string axis_description;
+    
     if (subSets.size() > 0)
     {
+        switch (which_axis_to_draw)
+        {
+        case 0:
+            axis_description = "Z Displacement";            
+            break;
+        case 1:
+            axis_description = "Y Displacement";
+            break;
+        case 2:
+            axis_description = "X Displacement";
+            break;
+        }
+        Scalar textColour = Scalar(255, 255, 0);
+        putText(*passedFrame, axis_description, Point(10, 80), FONT_HERSHEY_SIMPLEX, 2, textColour);
         for (SubSetData &theSet : (subSets)) {
             Rect r = Rect(theSet.X_Coord - (theSet.Subset_Size / 2),
                           theSet.Y_Coord - (theSet.Subset_Size / 2),
                           theSet.Subset_Size, theSet.Subset_Size);
-            // std::vector<Mat> channels(3);
-            // cv:split(*passedFrame,channels);
-            // Mat extractedRoi;
-            // extractedRoi = channels.at(2)(r);
-            // extractedRoi += char(((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS))*-5);
-            // cv::merge(channels, *passedFrame);
+            
+
             switch (which_axis_to_draw)
             {
-            case 0:
-                disp_colour = char(((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS)) * 10);
+            case 0:                
+                disp_value = (double)((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS));
                 break;
             case 1:
-                disp_colour = char(((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Y_FS)) * 10);
+                disp_value = (double)((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Y_FS));
                 break;
             case 2:
-                disp_colour = char(((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_X_FS)) * 10);
+                disp_value = (double)((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_X_FS));
                 break;
             default:
-                disp_colour = char(((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS)) * 10);
+                disp_value = (double)((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS));
                 break;
             }
-            rectangle(*passedFrame, r, Scalar(255 - disp_colour, 255 - disp_colour, 255), 1, 8, 0);
+            temp_col = rgb((double)(disp_value / 15.0));
+            if (theSet.Subset_Idx = 0){
+                cout << "Subset " << theSet.Subset_Idx << ":" << disp_value << endl;
+                cout << "B:" << temp_col[2] << " G:" << temp_col[1] << " R:" << temp_col[0] << endl;
+            }
+                
+            rectangle(*passedFrame, r, Scalar(temp_col[2], temp_col[1], temp_col[0]), -1, LINE_8);
         }
     }
 }

@@ -25,24 +25,37 @@
 
 #pragma once
 
-// We check if windows.h. is already included, as this might break compilation. See: https://sciplot.github.io/known_issues/
-#ifdef _WINDOWS_
-#ifdef _MSC_VER
-#pragma message(__FILE__ "(): warning: You might run into compiler errors if windows.h is included before sciplot.hpp! See: https://sciplot.github.io/known_issues/")
-#else
-#warning You might run into compiler errors if windows.h is included before sciplot.hpp! See: https://sciplot.github.io/known_issues/
-#endif // _MSC_VER
-#endif // _WINDOWS_
+// C++ includes
+#include <string>
 
-// sciplot includes
-#include <sciplot/Constants.hpp>
-#include <sciplot/Default.hpp>
-#include <sciplot/Enums.hpp>
-#include <sciplot/Figure.hpp>
-#include <sciplot/Palettes.hpp>
-#include <sciplot/Plot.hpp>
-#include <sciplot/Plot3D.hpp>
-#include <sciplot/PlotBase.hpp>
-#include <sciplot/StringOrDouble.hpp>
-#include <sciplot/Utils.hpp>
-#include <sciplot/Vec.hpp>
+namespace sciplot {
+
+/// The base class for other specs classes (e.g., LineSpecsOf, DrawSpecs, BorderSpecs, etc.)
+template <typename DerivedSpecs>
+class Specs
+{
+  public:
+    /// Pure virtual destructor (this class is an abstract base class).
+    virtual ~Specs() = default;
+
+    /// Return a string representation of this object of some class that derives from specs.
+    virtual auto repr() const -> std::string = 0;
+
+    /// Return a string representation of this object of some class that derives from specs.
+    operator std::string() const { return repr(); }
+
+    /// Return a reference to the specs object of class derived from this.
+    auto derived() -> DerivedSpecs& { return static_cast<DerivedSpecs&>(*this); }
+
+    /// Return a const reference to the specs object of class derived from this.
+    auto derived() const -> const DerivedSpecs& { return static_cast<const DerivedSpecs&>(*this); }
+};
+
+/// Output the state of a specs object to a ostream object.
+template <typename DerivedSpecs>
+auto operator<<(std::ostream& stream, const Specs<DerivedSpecs>& obj) -> std::ostream&
+{
+    return stream << obj.repr();
+}
+
+} // namespace sciplot

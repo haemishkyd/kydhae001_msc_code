@@ -25,24 +25,19 @@
 
 #pragma once
 
-// We check if windows.h. is already included, as this might break compilation. See: https://sciplot.github.io/known_issues/
-#ifdef _WINDOWS_
-#ifdef _MSC_VER
-#pragma message(__FILE__ "(): warning: You might run into compiler errors if windows.h is included before sciplot.hpp! See: https://sciplot.github.io/known_issues/")
-#else
-#warning You might run into compiler errors if windows.h is included before sciplot.hpp! See: https://sciplot.github.io/known_issues/
-#endif // _MSC_VER
-#endif // _WINDOWS_
+// C++ includes
+#include <limits>
+#include <string>
 
-// sciplot includes
-#include <sciplot/Constants.hpp>
-#include <sciplot/Default.hpp>
-#include <sciplot/Enums.hpp>
-#include <sciplot/Figure.hpp>
-#include <sciplot/Palettes.hpp>
-#include <sciplot/Plot.hpp>
-#include <sciplot/Plot3D.hpp>
-#include <sciplot/PlotBase.hpp>
-#include <sciplot/StringOrDouble.hpp>
-#include <sciplot/Utils.hpp>
-#include <sciplot/Vec.hpp>
+namespace sciplot {
+
+const auto PI = 3.14159265359;
+const auto GOLDEN_RATIO = 1.618034;
+const auto GOLDEN_RATIO_INVERSE = 1.0 / GOLDEN_RATIO;
+const auto INCH_TO_POINTS = 72.0; // based on pdfcairo terminal conversion
+const auto POINT_TO_INCHES = 1.0 / INCH_TO_POINTS;
+
+constexpr auto NaN = std::numeric_limits<double>::quiet_NaN(); // can be used to indicate missing values in a numeric vector
+const auto MISSING_INDICATOR = "\"?\""; // The string used to indicate missing y values.
+
+} // namespace sciplot
