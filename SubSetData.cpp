@@ -143,9 +143,8 @@ void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema, int
                 break;
             }
             temp_col = rgb((double)(disp_value / 15.0));
-            if (theSet.Subset_Idx = 0){
-                cout << "Subset " << theSet.Subset_Idx << ":" << disp_value << endl;
-                cout << "B:" << temp_col[2] << " G:" << temp_col[1] << " R:" << temp_col[0] << endl;
+            if (theSet.Subset_Idx == 0){
+                cout << "Subset " << theSet.Subset_Idx << ":" << disp_value << " " << temp_col.size() << endl;
             }
                 
             rectangle(*passedFrame, r, Scalar(temp_col[2], temp_col[1], temp_col[0]), -1, LINE_8);
