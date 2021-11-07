@@ -117,6 +117,7 @@ typedef struct
     ScriptRun *myScript;
     bool use_arducam;
     int WhichAxisToDraw; //0=Z, 1=Y, 2=X
+    bool MakeMovie;
 } MainDataStructType;
 
 Teuchos::RCP<DICe::Schema> schema;
@@ -576,7 +577,7 @@ void outputImageInformation()
 
     Mat heatmapframe = Mat::zeros(frame1.rows, frame1.cols, frame1.type());
 
-    drawSubsets(&heatmapframe, &schema, MainDataStruct.WhichAxisToDraw);
+    drawSubsets(&heatmapframe, &schema, MainDataStruct.WhichAxisToDraw, MainDataStruct.MakeMovie);
 
     vector<Mat> matrixOfFrames = {frame1, heatmapframe, frame2};
     hconcat(matrixOfFrames, OutputFrame);
@@ -1132,6 +1133,12 @@ int main(int argc, char *argv[])
         {
             MainDataStruct.WhichAxisToDraw = 0;
             cout << "Z Axis Chosen" << endl;
+        }
+        if (c == 'm')
+        {
+            MainDataStruct.MakeMovie = true;
+            initVideo();
+            cout << "Create movie file of heat map." << endl;
         }
         if (serial_port.IsOpen())
         {

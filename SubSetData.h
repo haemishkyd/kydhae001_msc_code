@@ -38,4 +38,5 @@ public:
 };
 
 list<SubSetData> *getSubSets();
-void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema, int which_axis_to_draw);
+void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema, int which_axis_to_draw, bool make_movie);
+void initVideo();

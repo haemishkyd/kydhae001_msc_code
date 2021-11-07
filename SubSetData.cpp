@@ -16,6 +16,7 @@ using namespace std;
 using namespace cv;
 
 static list<SubSetData> subSets;
+static int image_counter;
 
 list<SubSetData> *getSubSets(){
     return &subSets;
@@ -100,7 +101,11 @@ vector<int> rgb(double ratio)
     return rgb_array;
 }
 
-void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema, int which_axis_to_draw){
+void initVideo(){
+    image_counter = 0;
+}
+
+void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema, int which_axis_to_draw, bool make_movie){
     double disp_value;
     vector<int> temp_col;
     string axis_description;
@@ -130,16 +135,16 @@ void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema, int
             switch (which_axis_to_draw)
             {
             case 0:                
-                disp_value = (double)((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS));
+                disp_value = fabs((double)((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS)));
                 break;
             case 1:
-                disp_value = (double)((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Y_FS));
+                disp_value = fabs((double)((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Y_FS)));
                 break;
             case 2:
-                disp_value = (double)((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_X_FS));
+                disp_value = fabs((double)((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_X_FS)));
                 break;
             default:
-                disp_value = (double)((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS));
+                disp_value = fabs((double)((*passedSchema)->local_field_value(theSet.Subset_Idx, MODEL_DISPLACEMENT_Z_FS)));
                 break;
             }
             temp_col = rgb((double)(disp_value / 15.0));
@@ -147,7 +152,12 @@ void drawSubsets(Mat *passedFrame, Teuchos::RCP<DICe::Schema> *passedSchema, int
                 cout << "Subset " << theSet.Subset_Idx << ":" << disp_value << " " << temp_col.size() << endl;
             }
                 
-            rectangle(*passedFrame, r, Scalar(temp_col[2], temp_col[1], temp_col[0]), -1, LINE_8);
+            rectangle(*passedFrame, r, Scalar(temp_col[2], temp_col[1], temp_col[0]), -1, LINE_8);            
+        }
+        if (make_movie)
+        {
+            imwrite("heat_map_seq_" + to_string(image_counter) + ".jpg", *passedFrame);
+            image_counter++;
         }
     }
 }
